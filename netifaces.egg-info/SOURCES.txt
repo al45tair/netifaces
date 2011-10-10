@@ -1,0 +1,8 @@
+README
+netifaces.c
+setup.cfg
+setup.py
+netifaces.egg-info/PKG-INFO
+netifaces.egg-info/SOURCES.txt
+netifaces.egg-info/dependency_links.txt
+netifaces.egg-info/top_level.txt
