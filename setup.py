@@ -378,7 +378,7 @@ if not getattr(sys, 'getwindowsversion', None):
     setuptools.command.build_ext.build_ext = my_build_ext
 
 setup (name='netifaces',
-       version='0.5',
+       version='0.6',
        description="Portable network interface information.",
        license="MIT License",
        long_description="""\
