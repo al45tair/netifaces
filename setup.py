@@ -7,6 +7,9 @@ from setuptools.command.build_ext import build_ext
 from distutils.errors import *
 import pickle
 
+# Disable hard links, otherwise building distributions fails
+del os.link
+
 # On Windows, we need ws2_32 and iphlpapi
 if getattr(sys, 'getwindowsversion', None):
     libraries = ['ws2_32', 'iphlpapi']
