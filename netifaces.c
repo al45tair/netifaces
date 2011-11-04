@@ -30,8 +30,9 @@
 #endif
 
 /* For the benefit of stupid platforms (Linux), include all the sockaddr
-   definitions we can lay our hands on. */
-#if !HAVE_SOCKADDR_SA_LEN
+   definitions we can lay our hands on. It can also be useful for the benefit
+   of another stupid platform (FreeBSD, see PR 152036). */
+#include <netinet/in.h>
 #  if HAVE_NETASH_ASH_H
 #    include <netash/ash.h>
 #  endif
@@ -120,6 +121,7 @@ static int af_to_len(int af)
   return sizeof (struct sockaddr);
 }
 
+#if !HAVE_SOCKADDR_SA_LEN
 #define SA_LEN(sa)      af_to_len(sa->sa_family)
 #if HAVE_SIOCGLIFNUM
 #define SS_LEN(sa)      af_to_len(sa->ss_family)
@@ -267,13 +269,43 @@ string_from_sockaddr (struct sockaddr *addr,
                       char *buffer,
                       int buflen)
 {
+  struct sockaddr* bigaddr = 0;
+  int failure;
+  struct sockaddr* gniaddr;
+  socklen_t gnilen;
+
   if (!addr || addr->sa_family == AF_UNSPEC)
     return -1;
 
-  if (getnameinfo (addr, SA_LEN(addr),
+  if (SA_LEN(addr) < af_to_len(addr->sa_family)) {
+    /* Someteims ifa_netmask can be truncated. So let's detruncate it.  FreeBSD
+     * PR: kern/152036: getifaddrs(3) returns truncated sockaddrs for netmasks
+     * -- http://www.freebsd.org/cgi/query-pr.cgi?pr=152036 */
+    gnilen = af_to_len(addr->sa_family);
+    bigaddr = calloc(1, gnilen);
+    if (!bigaddr)
+      return -1;
+    memcpy(bigaddr, addr, SA_LEN(addr));
+#if HAVE_SOCKADDR_SA_LEN
+    bigaddr->sa_len = gnilen;
+#endif
+    gniaddr = bigaddr;
+  } else {
+    gnilen = SA_LEN(addr);
+    gniaddr = addr;
+  }
+
+  failure = getnameinfo (gniaddr, gnilen,
                    buffer, buflen,
                    NULL, 0,
-                   NI_NUMERICHOST) != 0) {
+                   NI_NUMERICHOST);
+
+  if (bigaddr) {
+    free(bigaddr);
+    bigaddr = 0;
+  }
+
+  if (failure) {
     int n, len;
     char *ptr;
     const char *data;
