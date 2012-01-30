@@ -394,11 +394,10 @@ ifaddrs (PyObject *self, PyObject *args)
   PyObject *result;
   int found = FALSE;
 #if defined(WIN32)
-  PIP_ADAPTER_INFO pAdapterInfo = NULL;
-  PIP_ADAPTER_INFO pInfo = NULL;
+  PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, pInfo = NULL;
   ULONG ulBufferLength = 0;
   DWORD dwRet;
-  PIP_ADDR_STRING str;
+  PIP_ADAPTER_UNICAST_ADDRESS pUniAddr;
 #endif
 
   if (!PyArg_ParseTuple (args, "s", &ifname))
@@ -413,14 +412,15 @@ ifaddrs (PyObject *self, PyObject *args)
   /* First, retrieve the adapter information.  We do this in a loop, in
      case someone adds or removes adapters in the meantime. */
   do {
-    dwRet = GetAdaptersInfo(pAdapterInfo, &ulBufferLength);
+    dwRet = GetAdaptersAddresses (AF_UNSPEC, 0, NULL,
+                                  pAdapterAddresses, &ulBufferLength);
 
     if (dwRet == ERROR_BUFFER_OVERFLOW) {
-      if (pAdapterInfo)
-        free (pAdapterInfo);
-      pAdapterInfo = (PIP_ADAPTER_INFO)malloc (ulBufferLength);
+      if (pAdapterAddresses)
+        free (pAdapterAddresses);
+      pAdapterAddresses = (PIP_ADAPTER_INFO)malloc (ulBufferLength);
 
-      if (!pAdapterInfo) {
+      if (!pAdapterAddresses) {
         Py_DECREF (result);
         PyErr_SetString (PyExc_MemoryError, "Not enough memory");
         return NULL;
@@ -431,15 +431,15 @@ ifaddrs (PyObject *self, PyObject *args)
   /* If we failed, then fail in Python too */
   if (dwRet != ERROR_SUCCESS && dwRet != ERROR_NO_DATA) {
     Py_DECREF (result);
-    if (pAdapterInfo)
-      free (pAdapterInfo);
+    if (pAdapterAddresses)
+      free (pAdapterAddresses);
 
     PyErr_SetString (PyExc_OSError,
                      "Unable to obtain adapter information.");
     return NULL;
   }
 
-  for (pInfo = pAdapterInfo; pInfo; pInfo = pInfo->Next) {
+  for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
     char buffer[256];
 
     if (strcmp (pInfo->AdapterName, ifname) != 0)
@@ -448,14 +448,14 @@ ifaddrs (PyObject *self, PyObject *args)
     found = TRUE;
 
     /* Do the physical address */
-    if (256 >= 3 * pInfo->AddressLength) {
+    if (256 >= 3 * pInfo->PhysicalAddressLength) {
       PyObject *hwaddr, *dict;
       char *ptr = buffer;
       unsigned n;
       
       *ptr = '\0';
-      for (n = 0; n < pInfo->AddressLength; ++n) {
-        sprintf (ptr, "%02x:", pInfo->Address[n] & 0xff);
+      for (n = 0; n < pInfo->PhysicalAddressLength; ++n) {
+        sprintf (ptr, "%02x:", pInfo->PhysicalAddress[n] & 0xff);
         ptr += 3;
       }
       *--ptr = '\0';
@@ -466,7 +466,7 @@ ifaddrs (PyObject *self, PyObject *args)
       if (!dict) {
         Py_XDECREF (hwaddr);
         Py_DECREF (result);
-        free (pAdapterInfo);
+        free (pAdapterAddresses);
         return NULL;
       }
 
@@ -475,32 +475,135 @@ ifaddrs (PyObject *self, PyObject *args)
 
       if (!add_to_family (result, AF_LINK, dict)) {
         Py_DECREF (result);
-        free (pAdapterInfo);
+        free (pAdapterAddresses);
         return NULL;
       }
     }
 
-    for (str = &pInfo->IpAddressList; str; str = str->Next) {
-      PyObject *addr = PyString_FromString (str->IpAddress.String);
-      PyObject *mask = PyString_FromString (str->IpMask.String);
+    for (pUniAddr = pInfo->FirstUnicastAddress;
+         pUniAddr;
+         pUniAddr = pUniAddr->Next) {
+      DWORD dwLen = sizeof (buffer);
+      INT iRet = WSAAddressToString (pUniAddr->Address.lpSockaddr,
+                                     pUniAddr->Address.iSockaddrLength,
+                                     NULL,
+                                     (LPTSTR)buffer,
+                                     &dwLen);
+      PyObject *addr;
+      PyObject *mask = NULL;
       PyObject *bcast = NULL;
-      PyObject *dict;
 
-      /* If this isn't the loopback interface, work out the broadcast
-         address, for better compatibility with other platforms. */
-      if (pInfo->Type != MIB_IF_TYPE_LOOPBACK) {
-        unsigned long inaddr = inet_addr (str->IpAddress.String);
-        unsigned long inmask = inet_addr (str->IpMask.String);
-        struct in_addr in;
-        char *brstr;
+      if (iRet)
+        continue;
 
-        in.S_un.S_addr = (inaddr | ~inmask) & 0xfffffffful;
+      addr = PyString_FromString (buffer);
 
-        brstr = inet_ntoa (in);
+      /* Compute the netmask and broadcast address, where possible */
+      if (pUniAddr->Address.lpSockaddr->sa_family == AF_INET) {
+        unsigned maskedBytes = pUniAddr->OnLinkPrefixLength >> 3;
+        unsigned maskedBits = pUniAddr->OnLinkPrefixLength & 7;
+        struct sockaddr_in maskAddr, bcastAddr;
+        unsigned char *pMask, *pBcast;
+        unsigned n;
 
-        if (brstr)
-          bcast = PyString_FromString (brstr);
+        if (maskedBytes >= 4) {
+          maskedBytes = 4;
+          maskedBits = 0;
+        }
+
+        memcpy (&maskAddr, pUniAddr->Address.lpSockaddr, sizeof (maskAddr));
+        memcpy (&bcastAddr, pUniAddr->Address.lpSockAddr, sizeof (bcastAddr));
+
+        pMask = (char *)&maskAddr.sin_addr;
+        pBcast = (char *)&bcastAddr.sin_addr;
+        if (maskedBytes < 4 && maskedBits) {
+          unsigned char bitMask = 0xff << (8 - maskedBits);
+          
+          pMask[maskedBytes] &= bitMask;
+          pBcast[maskedBytes] |= ~bitMask;
+          
+          ++maskedBytes;
+        }
+
+        while (maskedBytes < 4) {
+          pMask[maskedBytes] = 0;
+          pBcast[maskedBytes] = 0xff;
+          ++maskedBytes;
+        }
+
+        iRet = WSAAddressToString (&maskAddr,
+                                   sizeof (maskAddr),
+                                   NULL,
+                                   (LPTSTR)buffer,
+                                   &dwLen);
+
+        if (iRet == 0)
+          mask = PyString_FromString (buffer);
+
+        if (pInfo->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
+          iRet = WSAAddressToString (&bcastAddr,
+                                     sizeof (bcastAddr),
+                                     NULL,
+                                     (LPTSTR)buffer,
+                                     &dwLen);
+
+          if (iRet == 0)
+            bcast = PyString_FromString (buffer);
+        }
+      } else if (pUniAddr->Address.lpSockaddr->sa_family == AF_INET6) {
+        unsigned maskedBytes = pUniAddr->OnLinkPrefixLength >> 3;
+        unsigned maskedBits = pUniAddr->OnLinkPrefixLength & 7;
+        struct sockaddr_in6 maskAddr, bcastAddr;
+        unsigned char *pMask, *pBcast;
+        unsigned n;
+
+        if (maskedBytes >= 8) {
+          maskedBytes = 8;
+          maskedBits = 0;
+        }
+
+        memcpy (&maskAddr, pUniAddr->Address.lpSockaddr, sizeof (maskAddr));
+        memcpy (&bcastAddr, pUniAddr->Address.lpSockAddr, sizeof (bcastAddr));
+
+        pMask = (char *)&maskAddr.sin6_addr;
+        pBcast = (char *)&bcastAddr.sin6_addr;
+        if (maskedBytes < 8 && maskedBits) {
+          unsigned char bitMask = 0xff << (8 - maskedBits);
+          
+          pMask[maskedBytes] &= bitMask;
+          pBcast[maskedBytes] |= ~bitMask;
+          
+          ++maskedBytes;
+        }
+
+        while (maskedBytes < 8) {
+          pMask[maskedBytes] = 0;
+          pBcast[maskedBytes] = 0xff;
+          ++maskedBytes;
+        }
+
+        iRet = WSAAddressToString (&maskAddr,
+                                   sizeof (maskAddr),
+                                   NULL,
+                                   (LPTSTR)buffer,
+                                   &dwLen);
+
+        if (iRet == 0)
+          mask = PyString_FromString (buffer);
+
+        if (pInfo->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
+          iRet = WSAAddressToString (&bcastAddr,
+                                     sizeof (bcastAddr),
+                                     NULL,
+                                     (LPTSTR)buffer,
+                                     &dwLen);
+
+          if (iRet == 0)
+            bcast = PyString_FromString (buffer);
+        }
       }
+
+      PyObject *dict;
 
       dict = PyDict_New ();
 
@@ -509,7 +612,7 @@ ifaddrs (PyObject *self, PyObject *args)
         Py_XDECREF (mask);
         Py_XDECREF (bcast);
         Py_DECREF (result);
-        free (pAdapterInfo);
+        free (pAdapterAddresses);
         return NULL;
       }
 
@@ -526,13 +629,13 @@ ifaddrs (PyObject *self, PyObject *args)
 
       if (!add_to_family (result, AF_INET, dict)) {
         Py_DECREF (result);
-        free (pAdapterInfo);
+        free (pAdapterAddresses);
         return NULL;
       }
     }
   }
 
-  free (pAdapterInfo);
+  free (pAdapterAddresses);
 #elif HAVE_GETIFADDRS
   struct ifaddrs *addrs = NULL;
   struct ifaddrs *addr = NULL;
@@ -792,21 +895,21 @@ interfaces (PyObject *self)
   PyObject *result;
 
 #if defined(WIN32)
-  PIP_ADAPTER_INFO pAdapterInfo = NULL;
-  PIP_ADAPTER_INFO pInfo = NULL;
+  PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, *pInfo = NULL;
   ULONG ulBufferLength = 0;
   DWORD dwRet;
 
   /* First, retrieve the adapter information */
   do {
-    dwRet = GetAdaptersInfo(pAdapterInfo, &ulBufferLength);
+    dwRet = GetAdaptersAddresses(AF_UNSPEC, 0, NULL,
+                                 pAdapterAddresses, &ulBufferLength);
 
     if (dwRet == ERROR_BUFFER_OVERFLOW) {
-      if (pAdapterInfo)
-        free (pAdapterInfo);
-      pAdapterInfo = (PIP_ADAPTER_INFO)malloc (ulBufferLength);
+      if (pAdapterAddresses)
+        free (pAdapterAddresses);
+      pAdapterAddresses = (PIP_ADAPTER_INFO)malloc (ulBufferLength);
 
-      if (!pAdapterInfo) {
+      if (!pAdapterAddresses) {
         PyErr_SetString (PyExc_MemoryError, "Not enough memory");
         return NULL;
       }
@@ -815,8 +918,8 @@ interfaces (PyObject *self)
 
   /* If we failed, then fail in Python too */
   if (dwRet != ERROR_SUCCESS && dwRet != ERROR_NO_DATA) {
-    if (pAdapterInfo)
-      free (pAdapterInfo);
+    if (pAdapterAddresses)
+      free (pAdapterAddresses);
 
     PyErr_SetString (PyExc_OSError,
                      "Unable to obtain adapter information.");
@@ -826,18 +929,18 @@ interfaces (PyObject *self)
   result = PyList_New(0);
 
   if (dwRet == ERROR_NO_DATA) {
-    free (pAdapterInfo);
+    free (pAdapterAddresses);
     return result;
   }
 
-  for (pInfo = pAdapterInfo; pInfo; pInfo = pInfo->Next) {
+  for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
     PyObject *ifname = PyString_FromString (pInfo->AdapterName);
 
     PyList_Append (result, ifname);
     Py_DECREF (ifname);
   }
 
-  free (pAdapterInfo);
+  free (pAdapterAddresses);
 #elif HAVE_GETIFADDRS
   const char *prev_name = NULL;
   struct ifaddrs *addrs = NULL;
