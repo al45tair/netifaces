@@ -7,8 +7,13 @@ from setuptools.command.build_ext import build_ext
 from distutils.errors import *
 import pickle
 
-# Disable hard links, otherwise building distributions fails
-del os.link
+__version__ = "0.7"
+
+# Disable hard links, otherwise building distributions fails on OS X
+try:
+    del os.link
+except:
+    pass
 
 # On Windows, we need ws2_32 and iphlpapi
 if getattr(sys, 'getwindowsversion', None):
@@ -20,6 +25,8 @@ else:
     if mos.startswith('sunos'):
         libraries = ['socket', 'nsl']
     def_macros = []
+
+def_macros.append(("NETIFACES_VERSION", __version__))
 
 iface_mod = Extension('netifaces', sources=['netifaces.c'],
                       libraries=libraries,
@@ -33,7 +40,7 @@ class my_build_ext(build_ext):
         self.check_requirements()
         build_ext.build_extensions(self)
 
-    def test_build(self, contents, link=True, execute=True, libraries=None,
+    def test_build(self, contents, link=True, execute=False, libraries=None,
                    include_dirs=None, library_dirs=None):
         name = os.path.join(self.build_temp, 'conftest-%s.c' % self.conftestidx)
         self.conftestidx += 1
@@ -43,9 +50,6 @@ class my_build_ext(build_ext):
         print >>thefile, contents
         thefile.close()
 
-        tmpext = Extension('_dummy', [], libraries = libraries)
-        libraries = self.get_libraries(tmpext)
-        
         sys.stdout.flush()
         sys.stderr.flush()
         mystdout = os.dup(1)
@@ -275,7 +279,7 @@ class my_build_ext(build_ext):
                 int main (void) { return 0; }
                 """ % header
 
-                if self.test_build(testrig, link=False, execute=False):
+                if self.test_build(testrig, link=False):
                     result.append(header)
 
         if result:
@@ -309,7 +313,7 @@ class my_build_ext(build_ext):
             }
             """
 
-            result = self.test_build(testrig, execute=False)
+            result = self.test_build(testrig)
 
         if result:
             print 'yes. %s' % cached
@@ -356,7 +360,7 @@ class my_build_ext(build_ext):
                                                    in optional_headers]),
                             'sockaddr': sockaddr }
 
-                    if self.test_build(testrig, execute=False):
+                    if self.test_build(testrig):
                         result.append(sockaddr)
                 
             if result:
@@ -381,7 +385,7 @@ if not getattr(sys, 'getwindowsversion', None):
     setuptools.command.build_ext.build_ext = my_build_ext
 
 setup (name='netifaces',
-       version='0.6',
+       version=__version__,
        description="Portable network interface information.",
        license="MIT License",
        long_description="""\

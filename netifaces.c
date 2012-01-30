@@ -550,14 +550,16 @@ ifaddrs (PyObject *self, PyObject *args)
     if (strcmp (addr->ifa_name, ifname) != 0)
       continue;
  
+    /* We mark the interface as found, even if there are no addresses;
+       this results in sensible behaviour for these few cases. */
+    found = TRUE;
+
     /* Sometimes there are records without addresses (e.g. in the case of a
        dial-up connection via ppp, which on Linux can have a link address
        record with no actual address).  We skip these as they aren't useful.
        Thanks to Christian Kauhaus for reporting this issue. */
     if (!addr->ifa_addr)
       continue;  
-
-    found = TRUE;
 
     if (string_from_sockaddr (addr->ifa_addr, buffer, sizeof (buffer)) == 0)
       pyaddr = PyString_FromString (buffer);
@@ -950,6 +952,7 @@ static PyMethodDef methods[] = {
 PyMODINIT_FUNC
 initnetifaces (void)
 {
+  PyObject *address_family_dict;
   PyObject *m;
 
 #ifdef WIN32
@@ -962,7 +965,7 @@ initnetifaces (void)
   m = Py_InitModule ("netifaces", methods);
 
   /* Address families (auto-detect using #ifdef) */
-  PyObject *address_family_dict = PyDict_New();
+  address_family_dict = PyDict_New();
 #ifdef AF_UNSPEC  
   PyModule_AddIntConstant (m, "AF_UNSPEC", AF_UNSPEC);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_UNSPEC),
@@ -1259,4 +1262,10 @@ initnetifaces (void)
           PyString_FromString("AF_BLUETOOTH"));
 #endif
   PyModule_AddObject(m, "address_families", address_family_dict);
+
+  // Add-in the version number from setup.py
+#define _STR(x) #x
+#define STR(x)  _STR(x)
+
+  PyModule_AddStringConstant(m, "version", STR(NETIFACES_VERSION));
 }
