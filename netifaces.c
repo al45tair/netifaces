@@ -145,7 +145,10 @@ static int af_to_len(int af)
 
 #else /* defined(WIN32) */
 
+#define _WIN32_WINNT 0x0501
+
 #  include <winsock2.h>
+#  include <ws2tcpip.h>
 #  include <iphlpapi.h>
 
 #endif /* defined(WIN32) */
@@ -296,9 +299,9 @@ string_from_sockaddr (struct sockaddr *addr,
   }
 
   failure = getnameinfo (gniaddr, gnilen,
-                   buffer, buflen,
-                   NULL, 0,
-                   NI_NUMERICHOST);
+                         buffer, buflen,
+                         NULL, 0,
+                         NI_NUMERICHOST);
 
   if (bigaddr) {
     free(bigaddr);
@@ -306,7 +309,7 @@ string_from_sockaddr (struct sockaddr *addr,
   }
 
   if (failure) {
-    int n, len;
+    size_t n, len;
     char *ptr;
     const char *data;
       
@@ -352,13 +355,54 @@ string_from_sockaddr (struct sockaddr *addr,
     *--ptr = '\0';
   }
 
+  if (!buffer[0])
+    return -1;
+
   return 0;
 }
 #endif /* !defined(WIN32) */
 
+#if defined(WIN32)
+static int
+compare_bits (const void *pva,
+              const void *pvb,
+              unsigned bits)
+{
+  const unsigned char *pa = (const unsigned char *)pva;
+  const unsigned char *pb = (const unsigned char *)pvb;
+  unsigned char a, b;
+  static unsigned char masks[] = {
+    0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
+  };
+  while (bits >= 8) {
+    a = *pa++;
+    b = *pb++;
+    if (a < b)
+      return -1;
+    else if (a > b)
+      return +1;
+    bits -= 8;
+  }
+
+  if (bits) {
+    a = *pa++ & masks[bits];
+    b = *pb++ & masks[bits];
+    if (a < b)
+      return -1;
+    else if (a > b)
+      return +1;
+  }
+
+  return 0;
+}
+#endif
+
 static int
 add_to_family (PyObject *result, int family, PyObject *dict)
 {
+  if (!PyDict_Size (dict))
+    return TRUE;
+
   PyObject *py_family = PyInt_FromLong (family);
   PyObject *list = PyDict_GetItem (result, py_family);
 
@@ -412,13 +456,13 @@ ifaddrs (PyObject *self, PyObject *args)
   /* First, retrieve the adapter information.  We do this in a loop, in
      case someone adds or removes adapters in the meantime. */
   do {
-    dwRet = GetAdaptersAddresses (AF_UNSPEC, 0, NULL,
+    dwRet = GetAdaptersAddresses (AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
                                   pAdapterAddresses, &ulBufferLength);
 
     if (dwRet == ERROR_BUFFER_OVERFLOW) {
       if (pAdapterAddresses)
         free (pAdapterAddresses);
-      pAdapterAddresses = (PIP_ADAPTER_INFO)malloc (ulBufferLength);
+      pAdapterAddresses = (PIP_ADAPTER_ADDRESSES)malloc (ulBufferLength);
 
       if (!pAdapterAddresses) {
         Py_DECREF (result);
@@ -492,56 +536,87 @@ ifaddrs (PyObject *self, PyObject *args)
       PyObject *addr;
       PyObject *mask = NULL;
       PyObject *bcast = NULL;
+      PIP_ADAPTER_PREFIX pPrefix;
+      short family = pUniAddr->Address.lpSockaddr->sa_family;
 
       if (iRet)
         continue;
 
       addr = PyString_FromString (buffer);
 
-      /* Compute the netmask and broadcast address, where possible */
-      if (pUniAddr->Address.lpSockaddr->sa_family == AF_INET) {
-        unsigned maskedBytes = pUniAddr->OnLinkPrefixLength >> 3;
-        unsigned maskedBits = pUniAddr->OnLinkPrefixLength & 7;
-        struct sockaddr_in maskAddr, bcastAddr;
-        unsigned char *pMask, *pBcast;
-        unsigned n;
+      /* Find the netmask, where possible */
+      if (family == AF_INET) {
+         struct sockaddr_in *pAddr
+          = (struct sockaddr_in *)pUniAddr->Address.lpSockaddr;
 
-        if (maskedBytes >= 4) {
-          maskedBytes = 4;
-          maskedBits = 0;
-        }
+        for (pPrefix = pInfo->FirstPrefix;
+             pPrefix;
+             pPrefix = pPrefix->Next) {
+          struct sockaddr_in *pPrefixAddr
+            = (struct sockaddr_in *)pPrefix->Address.lpSockaddr;
+          struct sockaddr_in maskAddr, bcastAddr;
+          unsigned toDo;
+          unsigned wholeBytes, remainingBits;
+          unsigned char *pMaskBits, *pBcastBits;
 
-        memcpy (&maskAddr, pUniAddr->Address.lpSockaddr, sizeof (maskAddr));
-        memcpy (&bcastAddr, pUniAddr->Address.lpSockAddr, sizeof (bcastAddr));
-
-        pMask = (char *)&maskAddr.sin_addr;
-        pBcast = (char *)&bcastAddr.sin_addr;
-        if (maskedBytes < 4 && maskedBits) {
-          unsigned char bitMask = 0xff << (8 - maskedBits);
+          if (pPrefixAddr->sin_family != AF_INET)
+            continue;
           
-          pMask[maskedBytes] &= bitMask;
-          pBcast[maskedBytes] |= ~bitMask;
+          if (compare_bits (&pPrefixAddr->sin_addr,
+                            &pAddr->sin_addr,
+                            pPrefix->PrefixLength) != 0)
+            continue;
+
+          memcpy (&maskAddr,
+                  pPrefix->Address.lpSockaddr,
+                  sizeof (maskAddr));
+          memcpy (&bcastAddr,
+                  pPrefix->Address.lpSockaddr,
+                  sizeof (bcastAddr));
+                  
+          wholeBytes = pPrefix->PrefixLength >> 3;
+          remainingBits = pPrefix->PrefixLength & 7;
+
+          if (wholeBytes >= 4)
+            continue;
+
+          toDo = wholeBytes;
+          pMaskBits = (unsigned char *)&maskAddr.sin_addr;
+
+          while (toDo--)
+            *pMaskBits++ = 0xff;
+
+          toDo = 4 - wholeBytes;
+
+          pBcastBits = (unsigned char *)&bcastAddr.sin_addr + wholeBytes;
+
+          if (remainingBits) {
+            static const unsigned char masks[] = {
+              0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
+            };
+            *pMaskBits++ = masks[remainingBits];
+            *pBcastBits &= masks[remainingBits];
+            *pBcastBits++ |= ~masks[remainingBits];
+            --toDo;
+          }
+
+          while (toDo--) {
+            *pMaskBits++ = 0;
+            *pBcastBits++ = 0xff;
+          }
+
+          dwLen = sizeof (buffer);
+          iRet = WSAAddressToString ((SOCKADDR *)&maskAddr,
+                                     sizeof (maskAddr),
+                                     NULL,
+                                     (LPTSTR)buffer,
+                                     &dwLen);
+
+          if (iRet == 0)
+            mask = PyString_FromString (buffer);
           
-          ++maskedBytes;
-        }
-
-        while (maskedBytes < 4) {
-          pMask[maskedBytes] = 0;
-          pBcast[maskedBytes] = 0xff;
-          ++maskedBytes;
-        }
-
-        iRet = WSAAddressToString (&maskAddr,
-                                   sizeof (maskAddr),
-                                   NULL,
-                                   (LPTSTR)buffer,
-                                   &dwLen);
-
-        if (iRet == 0)
-          mask = PyString_FromString (buffer);
-
-        if (pInfo->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
-          iRet = WSAAddressToString (&bcastAddr,
+          dwLen = sizeof (buffer);
+          iRet = WSAAddressToString ((SOCKADDR *)&bcastAddr,
                                      sizeof (bcastAddr),
                                      NULL,
                                      (LPTSTR)buffer,
@@ -549,50 +624,83 @@ ifaddrs (PyObject *self, PyObject *args)
 
           if (iRet == 0)
             bcast = PyString_FromString (buffer);
+          else
+            printf ("%d\n", iRet);
+
+          break;
         }
-      } else if (pUniAddr->Address.lpSockaddr->sa_family == AF_INET6) {
-        unsigned maskedBytes = pUniAddr->OnLinkPrefixLength >> 3;
-        unsigned maskedBits = pUniAddr->OnLinkPrefixLength & 7;
-        struct sockaddr_in6 maskAddr, bcastAddr;
-        unsigned char *pMask, *pBcast;
-        unsigned n;
+      } else if (family == AF_INET6) {
+        struct sockaddr_in6 *pAddr
+          = (struct sockaddr_in6 *)pUniAddr->Address.lpSockaddr;
 
-        if (maskedBytes >= 8) {
-          maskedBytes = 8;
-          maskedBits = 0;
-        }
+        for (pPrefix = pInfo->FirstPrefix;
+             pPrefix;
+             pPrefix = pPrefix->Next) {
+          struct sockaddr_in6 *pPrefixAddr
+            = (struct sockaddr_in6 *)pPrefix->Address.lpSockaddr;
+          struct sockaddr_in6 maskAddr, bcastAddr;
+          unsigned toDo;
+          unsigned wholeBytes, remainingBits;
+          unsigned char *pMaskBits, *pBcastBits;
 
-        memcpy (&maskAddr, pUniAddr->Address.lpSockaddr, sizeof (maskAddr));
-        memcpy (&bcastAddr, pUniAddr->Address.lpSockAddr, sizeof (bcastAddr));
-
-        pMask = (char *)&maskAddr.sin6_addr;
-        pBcast = (char *)&bcastAddr.sin6_addr;
-        if (maskedBytes < 8 && maskedBits) {
-          unsigned char bitMask = 0xff << (8 - maskedBits);
+          if (pPrefixAddr->sin6_family != AF_INET6)
+            continue;
           
-          pMask[maskedBytes] &= bitMask;
-          pBcast[maskedBytes] |= ~bitMask;
+          if (compare_bits (&pPrefixAddr->sin6_addr,
+                            &pAddr->sin6_addr,
+                            pPrefix->PrefixLength) != 0)
+            continue;
+
+          memcpy (&maskAddr,
+                  pPrefix->Address.lpSockaddr,
+                  sizeof (maskAddr));
+          memcpy (&bcastAddr,
+                  pPrefix->Address.lpSockaddr,
+                  sizeof (bcastAddr));
+                  
+          wholeBytes = pPrefix->PrefixLength >> 3;
+          remainingBits = pPrefix->PrefixLength & 7;
+
+          if (wholeBytes >= 8)
+            continue;
+
+          toDo = wholeBytes;
+          pMaskBits = (unsigned char *)&maskAddr.sin6_addr;
+
+          while (toDo--)
+            *pMaskBits++ = 0xff;
+
+          toDo = 8 - wholeBytes;
+
+          pBcastBits = (unsigned char *)&bcastAddr.sin6_addr + wholeBytes;
+
+          if (remainingBits) {
+            static const unsigned char masks[] = {
+              0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
+            };
+            *pMaskBits++ = masks[remainingBits];
+            *pBcastBits &= masks[remainingBits];
+            *pBcastBits++ |= ~masks[remainingBits];
+            --toDo;
+          }
+
+          while (toDo--) {
+            *pMaskBits++ = 0;
+            *pBcastBits++ = 0xff;
+          }
+
+          dwLen = sizeof (buffer);
+          iRet = WSAAddressToString ((SOCKADDR *)&maskAddr,
+                                     sizeof (maskAddr),
+                                     NULL,
+                                     (LPTSTR)buffer,
+                                     &dwLen);
+
+          if (iRet == 0)
+            mask = PyString_FromString (buffer);
           
-          ++maskedBytes;
-        }
-
-        while (maskedBytes < 8) {
-          pMask[maskedBytes] = 0;
-          pBcast[maskedBytes] = 0xff;
-          ++maskedBytes;
-        }
-
-        iRet = WSAAddressToString (&maskAddr,
-                                   sizeof (maskAddr),
-                                   NULL,
-                                   (LPTSTR)buffer,
-                                   &dwLen);
-
-        if (iRet == 0)
-          mask = PyString_FromString (buffer);
-
-        if (pInfo->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
-          iRet = WSAAddressToString (&bcastAddr,
+          dwLen = sizeof (buffer);
+          iRet = WSAAddressToString ((SOCKADDR *)&bcastAddr,
                                      sizeof (bcastAddr),
                                      NULL,
                                      (LPTSTR)buffer,
@@ -600,6 +708,8 @@ ifaddrs (PyObject *self, PyObject *args)
 
           if (iRet == 0)
             bcast = PyString_FromString (buffer);
+
+          break;
         }
       }
 
@@ -627,15 +737,15 @@ ifaddrs (PyObject *self, PyObject *args)
       Py_XDECREF (mask);
       Py_XDECREF (bcast);
 
-      if (!add_to_family (result, AF_INET, dict)) {
+      if (!add_to_family (result, family, dict)) {
         Py_DECREF (result);
-        free (pAdapterAddresses);
+        free ((void *)pAdapterAddresses);
         return NULL;
       }
     }
   }
 
-  free (pAdapterAddresses);
+  free ((void *)pAdapterAddresses);
 #elif HAVE_GETIFADDRS
   struct ifaddrs *addrs = NULL;
   struct ifaddrs *addr = NULL;
@@ -895,7 +1005,7 @@ interfaces (PyObject *self)
   PyObject *result;
 
 #if defined(WIN32)
-  PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, *pInfo = NULL;
+  PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, pInfo = NULL;
   ULONG ulBufferLength = 0;
   DWORD dwRet;
 
@@ -907,7 +1017,7 @@ interfaces (PyObject *self)
     if (dwRet == ERROR_BUFFER_OVERFLOW) {
       if (pAdapterAddresses)
         free (pAdapterAddresses);
-      pAdapterAddresses = (PIP_ADAPTER_INFO)malloc (ulBufferLength);
+      pAdapterAddresses = (PIP_ADAPTER_ADDRESSES)malloc (ulBufferLength);
 
       if (!pAdapterAddresses) {
         PyErr_SetString (PyExc_MemoryError, "Not enough memory");
@@ -934,7 +1044,7 @@ interfaces (PyObject *self)
   }
 
   for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
-    PyObject *ifname = PyString_FromString (pInfo->AdapterName);
+    PyObject *ifname = (PyObject *)PyString_FromString (pInfo->AdapterName);
 
     PyList_Append (result, ifname);
     Py_DECREF (ifname);
@@ -1060,9 +1170,8 @@ initnetifaces (void)
 
 #ifdef WIN32
   WSADATA wsad;
-  int iResult;
   
-  iResult = WSAStartup(MAKEWORD (2, 2), &wsad);
+  WSAStartup(MAKEWORD (2, 2), &wsad);
 #endif
 
   m = Py_InitModule ("netifaces", methods);
