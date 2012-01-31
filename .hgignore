@@ -5,3 +5,4 @@ dist
 *.pyd
 *.so
 *~
+*.egg-info
