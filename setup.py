@@ -7,7 +7,7 @@ from setuptools.command.build_ext import build_ext
 from distutils.errors import *
 import pickle
 
-__version__ = "0.7"
+__version__ = "0.8"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:

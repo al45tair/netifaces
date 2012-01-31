@@ -839,7 +839,7 @@ ifaddrs (PyObject *self, PyObject *args)
   if (ioctl (sock, SIOCGIFHWADDR, &ifr) == 0) {
     found = TRUE;
 
-    if (string_from_sockaddr (ifr->CNAME(ifr_addr), buffer, sizeof (buffer)) == 0) {
+    if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0) {
       PyObject *hwaddr = PyString_FromString (buffer);
       PyObject *dict = PyDict_New ();
       PyObject *list = PyList_New (1);
