@@ -394,8 +394,7 @@ get access to a list of the network interfaces on the local machine, and to
 obtain the addresses of those network interfaces.
 
 The package has been tested on Mac OS X, Windows XP, Windows Vista, Linux
-and Solaris.  On Windows, it is currently not able to retrieve IPv6
-addresses, owing to shortcomings of the Windows API.
+and Solaris.
 
 It should work on other UNIX-like systems provided they implement
 either getifaddrs() or support the SIOCGIFxxx socket options, although the
