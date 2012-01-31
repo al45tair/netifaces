@@ -842,14 +842,10 @@ ifaddrs (PyObject *self, PyObject *args)
     if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0) {
       PyObject *hwaddr = PyString_FromString (buffer);
       PyObject *dict = PyDict_New ();
-      PyObject *list = PyList_New (1);
-      PyObject *family = PyInt_FromLong (AF_LINK);
 
-      if (!hwaddr || !dict || !list || !family) {
+      if (!hwaddr || !dict) {
         Py_XDECREF (hwaddr);
         Py_XDECREF (dict);
-        Py_XDECREF (list)
-        Py_XDECREF (family);
         Py_XDECREF (result);
         close (sock);
         return NULL;
@@ -858,11 +854,11 @@ ifaddrs (PyObject *self, PyObject *args)
       PyDict_SetItemString (dict, "addr", hwaddr);
       Py_DECREF (hwaddr);
 
-      PyList_SET_ITEM (list, 0, dict);
-
-      PyDict_SetItem (result, family, list);
-      Py_DECREF (family);
-      Py_DECREF (list);
+      if (!add_to_family (result, AF_LINK, dict)) {
+        Py_DECREF (result);
+        close (sock);
+        return NULL;
+      }
     }
   }
 #endif
@@ -958,35 +954,13 @@ ifaddrs (PyObject *self, PyObject *args)
   Py_XDECREF (braddr);
   Py_XDECREF (dstaddr);
 
-  if (!PyDict_Size (dict))
-    Py_DECREF (dict);
-  else {
-    PyObject *list = PyList_New(1);
-  
-    if (!list) {
-      Py_DECREF (dict);
-      Py_DECREF (result);
-      close (sock);
-      return NULL;
-    }
-
-    PyList_SET_ITEM (list, 0, dict);
-
-    PyObject *family = PyInt_FromLong (AF_INET);
-    if (!family) {
-      Py_DECREF (result);
-      Py_DECREF (list);
-      close (sock);
-      return NULL;
-    }
-
-    PyDict_SetItem (result, family, list);
-    Py_DECREF (family);
-    Py_DECREF (list);
+  if (!add_to_family (result, AF_INET, dict)) {
+    Py_DECREF (result);
+    close (sock);
+    return NULL;
   }
 
   close (sock);
-
 #endif /* HAVE_SOCKET_IOCTLS */
 
   if (found)
@@ -1080,7 +1054,7 @@ interfaces (PyObject *self)
   const char *prev_name = NULL;
   int fd = socket (AF_INET, SOCK_DGRAM, 0);
   struct CNAME(ifconf) ifc;
-  int len = -1, n;
+  int len = -1;
 
   if (fd < 0) {
     PyErr_SetFromErrno (PyExc_OSError);
@@ -1108,7 +1082,7 @@ interfaces (PyObject *self)
   if (len < 0)
     len = 64;
 
-  ifc.CNAME(ifc_len) = len * sizeof (struct CNAME(ifreq));
+  ifc.CNAME(ifc_len) = (int)(len * sizeof (struct CNAME(ifreq)));
   ifc.CNAME(ifc_buf) = malloc (ifc.CNAME(ifc_len));
 
   if (!ifc.CNAME(ifc_buf)) {
@@ -1130,8 +1104,9 @@ interfaces (PyObject *self)
 
   result = PyList_New (0);
   struct CNAME(ifreq) *pfreq = ifc.CNAME(ifc_req);
-  for (n = 0; n < ifc.CNAME(ifc_len)/sizeof(struct CNAME(ifreq));
-      n++,pfreq++) {
+  struct CNAME(ifreq) *pfreqend = (struct CNAME(ifreq) *)((char *)pfreq
+                                                          + ifc.CNAME(ifc_len));
+  while (pfreq < pfreqend) {
     if (!prev_name || strncmp (prev_name, pfreq->CNAME(ifr_name), IFNAMSIZ) != 0) {
       PyObject *name = PyString_FromString (pfreq->CNAME(ifr_name));
 
@@ -1141,6 +1116,19 @@ interfaces (PyObject *self)
 
       prev_name = pfreq->CNAME(ifr_name);
     }
+
+#if !HAVE_SOCKADDR_SA_LEN
+    ++pfreq;
+#else
+    /* On some platforms, the ifreq struct can *grow*(!) if the socket address
+       is very long.  Mac OS X is such a platform. */
+    {
+      size_t len = sizeof (struct CNAME(ifreq));
+      if (pfreq->ifr_addr.sa_len > sizeof (struct sockaddr))
+        len = len - sizeof (struct sockaddr) + pfreq->ifr_addr.sa_len;
+        pfreq = (struct CNAME(ifreq) *)((char *)pfreq + len);
+    }
+#endif
   }
 
   free (ifc.CNAME(ifc_buf));
