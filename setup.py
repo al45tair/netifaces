@@ -201,6 +201,11 @@ class my_build_ext(build_ext):
             else:
                 cached = ''
 
+                if not os.path.exists(self.build_temp):
+                    os.makedirs(self.build_temp)
+                outname = os.path.join(self.build_temp, 'conftest3.out')
+                self.ctout = os.open(outname, os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+
                 result = []
                 ioctls = ('SIOCGIFCONF',
                           'SIOCGSIZIFCONF',
@@ -336,6 +341,11 @@ class my_build_ext(build_ext):
                 cached = '(cached)'
             else:
                 cached = ''
+
+                if not os.path.exists(self.build_temp):
+                    os.makedirs(self.build_temp)
+                outname = os.path.join(self.build_temp, 'conftest4.out')
+                self.ctout = os.open(outname, os.O_RDWR | os.O_CREAT | os.O_TRUNC)
 
                 sockaddrs = ('at', 'ax25', 'dl', 'eon', 'in', 'in6',
                              'inarp', 'ipx', 'iso', 'ns', 'un', 'x25',
