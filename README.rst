@@ -1,5 +1,5 @@
-netifaces 0.9
-=============
+netifaces 0.10.0
+================
 
 .. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png
    :target: https://drone.io/bitbucket.org/al45tair/netifaces/latest
@@ -24,8 +24,8 @@ This package attempts to solve that problem.
 
 First you need to install it, which you can do by typing::
 
-  tar xvzf netifaces-0.9.tar.gz
-  cd netifaces-0.9
+  tar xvzf netifaces-0.10.0.tar.gz
+  cd netifaces-0.10.0
   python setup.py install
 
 Once that's done, you'll need to start Python and do something like the
@@ -155,3 +155,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+5. Why the jump to 0.10.0?
+--------------------------
+
+Because someone released a fork of netifaces with the version 0.9.0.
+Hopefully skipping the version number should remove any confusion.

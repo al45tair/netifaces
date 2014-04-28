@@ -16,7 +16,7 @@ if sys.version_info[0] == 2:
 else:
     output = getattr(__builtins__, 'print')
     
-__version__ = "0.9"
+__version__ = "0.10.0"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
@@ -403,22 +403,15 @@ class my_build_ext(build_ext):
 if not getattr(sys, 'getwindowsversion', None):
     setuptools.command.build_ext.build_ext = my_build_ext
 
+readme_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                           'README.rst')
+long_desc = open(readme_path, 'r').read()
+
 setup (name='netifaces',
        version=__version__,
        description="Portable network interface information.",
        license="MIT License",
-       long_description="""\
-netifaces provides a (hopefully portable-ish) way for Python programmers to
-get access to a list of the network interfaces on the local machine, and to
-obtain the addresses of those network interfaces.
-
-The package has been tested on Mac OS X, Windows XP, Windows Vista, Linux
-and Solaris.
-
-It should work on other UNIX-like systems provided they implement
-either getifaddrs() or support the SIOCGIFxxx socket options, although the
-data provided by the socket options is normally less complete.
-""",
+       long_description=long_desc,
        author='Alastair Houghton',
        author_email='alastair@alastairs-place.net',
        url='http://alastairs-place.net/netifaces',
@@ -427,5 +420,11 @@ data provided by the socket options is normally less complete.
     'Intended Audience :: Developers',
     'License :: OSI Approved :: MIT License',
     'Topic :: System :: Networking',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 2',
+    'Programming Language :: Python :: 2.5',
+    'Programming Language :: Python :: 2.6',
+    'Programming Language :: Python :: 2.7',
+    'Programming Language :: Python :: 3',
     ],
        ext_modules=[iface_mod])
