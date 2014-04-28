@@ -20,53 +20,54 @@ This package attempts to solve that problem.
 
 First you need to install it, which you can do by typing
 
-  tar xvzf netifaces-0.4.tar.gz
-  cd netifaces-0.4
+::
+  tar xvzf netifaces-0.9.tar.gz
+  cd netifaces-0.9
   python setup.py install
 
 Once that's done, you'll need to start Python and do something like the
-following:
+following::
 
-  >>> import netifaces
+>>> import netifaces
 
 Then if you enter
 
-  >>> netifaces.interfaces()
-  ['lo0', 'gif0', 'stf0', 'en0', 'en1', 'fw0']
+>>> netifaces.interfaces()
+['lo0', 'gif0', 'stf0', 'en0', 'en1', 'fw0']
 
 you'll see the list of interface identifiers for your machine.
 
 You can ask for the addresses of a particular interface by doing
 
-  >>> netifaces.ifaddresses('lo0')
-  {18: [{'addr': ''}], 2: [{'peer': '127.0.0.1', 'netmask': '255.0.0.0', 'addr': '127.0.0.1'}], 30: [{'peer': '::1', 'netmask': 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff', 'addr': '::1'}, {'peer': '', 'netmask': 'ffff:ffff:ffff:ffff::', 'addr': 'fe80::1%lo0'}]}
+>>> netifaces.ifaddresses('lo0')
+{18: [{'addr': ''}], 2: [{'peer': '127.0.0.1', 'netmask': '255.0.0.0', 'addr': '127.0.0.1'}], 30: [{'peer': '::1', 'netmask': 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff', 'addr': '::1'}, {'peer': '', 'netmask': 'ffff:ffff:ffff:ffff::', 'addr': 'fe80::1%lo0'}]}
 
 Hmmmm.  That result looks a bit cryptic; let's break it apart and explain
-what each piece means.  It returned a dictionary, so let's look there first:
+what each piece means.  It returned a dictionary, so let's look there first::
 
   { 18: [...], 2: [...], 30: [...] }
 
 Each of the numbers refers to a particular address family.  In this case, we
-have three address families listed; on my system, 18 is AF_LINK (which means
-the link layer interface, e.g. Ethernet), 2 is AF_INET (normal Internet
-addresses), and 30 is AF_INET6 (IPv6).
+have three address families listed; on my system, 18 is ``AF_LINK`` (which means
+the link layer interface, e.g. Ethernet), 2 is ``AF_INET`` (normal Internet
+addresses), and 30 is ``AF_INET6`` (IPv6).
 
 But wait!  Don't use these numbers in your code.  The numeric values here are
 system dependent; fortunately, I thought of that when writing netifaces, so
 the module declares a range of values that you might need.  e.g.
 
-  >>> netifaces.AF_LINK
-  18
+>>> netifaces.AF_LINK
+18
 
 Again, on your system, the number may be different.
 
 So, what we've established is that the dictionary that's returned has one
 entry for each address family for which this interface has an address.  Let's
-take a look at the AF_INET addresses now:
+take a look at the ``AF_INET`` addresses now:
 
-  >>> addrs = netifaces.ifaddresses('lo0')
-  >>> addrs[netifaces.AF_INET]
-  [{'peer': '127.0.0.1', 'netmask': '255.0.0.0', 'addr': '127.0.0.1'}]
+>>> addrs = netifaces.ifaddresses('lo0')
+>>> addrs[netifaces.AF_INET]
+[{'peer': '127.0.0.1', 'netmask': '255.0.0.0', 'addr': '127.0.0.1'}]
 
 You might be wondering why this value is a list.  The reason is that it's
 possible for an interface to have more than one address, even within the
@@ -81,9 +82,9 @@ has a *peer* address rather than a broadcast address.
 
 Let's look at a more interesting interface.
 
-  >>> addrs = netifaces.ifaddresses('en0')
-  >>> addrs[netifaces.AF_INET]
-  [{'broadcast': '10.15.255.255', 'netmask': '255.240.0.0', 'addr': '10.0.1.4'}, {'broadcast': '192.168.0.255', 'addr': '192.168.0.47'}]
+>>> addrs = netifaces.ifaddresses('en0')
+>>> addrs[netifaces.AF_INET]
+[{'broadcast': '10.15.255.255', 'netmask': '255.240.0.0', 'addr': '10.0.1.4'}, {'broadcast': '192.168.0.255', 'addr': '192.168.0.47'}]
 
 This interface has two addresses (see, I told you...)  Both of them are
 regular IPv4 addresses, although in one case the netmask has been changed
@@ -96,18 +97,18 @@ Now, say we want, instead of the IP addresses, to get the MAC address; that
 is, the hardware address of the Ethernet adapter running this interface.  We
 can do
 
-  >>> addrs[netifaces.AF_LINK]
-  [{'addr': '00:12:34:56:78:9a'}]
+>>> addrs[netifaces.AF_LINK]
+[{'addr': '00:12:34:56:78:9a'}]
 
 Note that this may not be available on platforms without getifaddrs(), unless
-they happen to implement SIOCGIFHWADDR.  Note also that you just get the
-address; it's unlikely that you'll see anything else with an AF_LINK address.
-Oh, and don't assume that all AF_LINK addresses are Ethernet; you might, for
+they happen to implement ``SIOCGIFHWADDR``.  Note also that you just get the
+address; it's unlikely that you'll see anything else with an ``AF_LINK`` address.
+Oh, and don't assume that all ``AF_LINK`` addresses are Ethernet; you might, for
 instance, be on a Mac, in which case:
 
-  >>> addrs = netifaces.ifaddresses('fw0')
-  >>> addrs[netifaces.AF_LINK]
-  [{'addr': '00:12:34:56:78:9a:bc:de'}]
+>>> addrs = netifaces.ifaddresses('fw0')
+>>> addrs[netifaces.AF_LINK]
+[{'addr': '00:12:34:56:78:9a:bc:de'}]
 
 No, that isn't an exceptionally long Ethernet MAC address---it's a FireWire
 address.
@@ -116,15 +117,16 @@ address.
 --------------------------------------------------
 
 Well, see, here's the thing.  It's been tested on Mac OS X, and it seems to
-work.  (OS X helpfully has some of the SIOCGIFxxx ioctl()s, which means that
-most of those have been tested too, the only glaring exception being the
-SIOCGIFHWADDR ioctl(), which OS X just doesn't have.)
+work.  (OS X helpfully has some of the ``SIOCGIFxxx`` ``ioctl()``s, which means
+that most of those have been tested too, the only glaring exception being the
+``SIOCGIFHWADDR`` ``ioctl()``, which OS X just doesn't have.)
 
 It should probably work on most of the other UNIX-like systems with relatively
 minor changes.  If you do have to change something, send it to me at
 <alastair AT alastairs-place.net> and I'll see if I can merge it in.
 
-It also works just fine on Windows, using the GetAdaptersAddresses() function.
+It also works just fine on Windows, using the ``GetAdaptersAddresses()``
+function.
 
 4. What license is this under?
 ------------------------------
