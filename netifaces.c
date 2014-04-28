@@ -1,5 +1,25 @@
 #include <Python.h>
 
+/* Python 3 compatibility */
+#if PY_MAJOR_VERSION >= 3
+#define PyInt_FromLong PyLong_FromLong
+#define PyString_FromString PyUnicode_FromString
+
+#define MODULE_ERROR            NULL
+#define MODULE_RETURN(v)       return (v)
+#define MODULE_INIT(name)       PyMODINIT_FUNC PyInit_##name(void)
+#define MODULE_DEF(obj,name,doc,methods)                        \
+  static struct PyModuleDef moduledef = {                       \
+    PyModuleDef_HEAD_INIT, (name), (doc), -1, (methods), };     \
+  obj = PyModule_Create(&moduledef);
+#else /* PY_MAJOR_VERSION < 3 */
+#define MODULE_ERROR
+#define MODULE_RETURN(v)
+#define MODULE_INIT(name)       void init##name(void)
+#define MODULE_DEF(obj,name,doc,methods) \
+  obj = Py_InitModule3((name), (methods), (doc));
+#endif
+
 #ifndef WIN32
 
 #  include <sys/types.h>
@@ -11,11 +31,11 @@
 #    include <sys/ioctl.h>
 #    include <netinet/in.h>
 #    include <arpa/inet.h>
-#if defined(__sun)
-#include <unistd.h>
-#include <stropts.h>
-#include <sys/sockio.h>
-#endif
+#    if defined(__sun)
+#      include <unistd.h>
+#      include <stropts.h>
+#      include <sys/sockio.h>
+#    endif
 #  endif /* HAVE_SOCKET_IOCTLS */
 
 /* For logical interfaces support we convert all names to same name prefixed with l */
@@ -445,6 +465,9 @@ ifaddrs (PyObject *self, PyObject *args)
   ULONG ulBufferLength = 0;
   DWORD dwRet;
   PIP_ADAPTER_UNICAST_ADDRESS pUniAddr;
+#elif HAVE_GETIFADDRS
+  struct ifaddrs *addrs = NULL;
+  struct ifaddrs *addr = NULL;
 #endif
 
   if (!PyArg_ParseTuple (args, "s", &ifname))
@@ -752,9 +775,6 @@ ifaddrs (PyObject *self, PyObject *args)
 
   free ((void *)pAdapterAddresses);
 #elif HAVE_GETIFADDRS
-  struct ifaddrs *addrs = NULL;
-  struct ifaddrs *addr = NULL;
-
   if (getifaddrs (&addrs) < 0) {
     Py_DECREF (result);
     PyErr_SetFromErrno (PyExc_OSError);
@@ -788,37 +808,39 @@ ifaddrs (PyObject *self, PyObject *args)
     if (string_from_sockaddr (addr->ifa_broadaddr, buffer, sizeof (buffer)) == 0)
       braddr = PyString_FromString (buffer);
 
-    PyObject *dict = PyDict_New();
+    {
+      PyObject *dict = PyDict_New();
 
-    if (!dict) {
+      if (!dict) {
+        Py_XDECREF (pyaddr);
+        Py_XDECREF (netmask);
+        Py_XDECREF (braddr);
+        Py_DECREF (result);
+        freeifaddrs (addrs);
+        return NULL;
+      }
+
+      if (pyaddr)
+        PyDict_SetItemString (dict, "addr", pyaddr);
+      if (netmask)
+        PyDict_SetItemString (dict, "netmask", netmask);
+
+      if (braddr) {
+        if (addr->ifa_flags & (IFF_POINTOPOINT | IFF_LOOPBACK))
+          PyDict_SetItemString (dict, "peer", braddr);
+        else
+          PyDict_SetItemString (dict, "broadcast", braddr);
+      }
+
       Py_XDECREF (pyaddr);
       Py_XDECREF (netmask);
       Py_XDECREF (braddr);
-      Py_DECREF (result);
-      freeifaddrs (addrs);
-      return NULL;
-    }
 
-    if (pyaddr)
-      PyDict_SetItemString (dict, "addr", pyaddr);
-    if (netmask)
-      PyDict_SetItemString (dict, "netmask", netmask);
-
-    if (braddr) {
-      if (addr->ifa_flags & (IFF_POINTOPOINT | IFF_LOOPBACK))
-        PyDict_SetItemString (dict, "peer", braddr);
-      else
-        PyDict_SetItemString (dict, "broadcast", braddr);
-    }
-
-    Py_XDECREF (pyaddr);
-    Py_XDECREF (netmask);
-    Py_XDECREF (braddr);
-
-    if (!add_to_family (result, addr->ifa_addr->sa_family, dict)) {
-      Py_DECREF (result);
-      freeifaddrs (addrs);
-      return NULL;
+      if (!add_to_family (result, addr->ifa_addr->sa_family, dict)) {
+        Py_DECREF (result);
+        freeifaddrs (addrs);
+        return NULL;
+      }
     }
   }
 
@@ -933,36 +955,38 @@ ifaddrs (PyObject *self, PyObject *args)
   }
 #endif
 
-  PyObject *dict = PyDict_New();
+  {
+    PyObject *dict = PyDict_New();
 
-  if (!dict) {
+    if (!dict) {
+      Py_XDECREF (addr);
+      Py_XDECREF (netmask);
+      Py_XDECREF (braddr);
+      Py_XDECREF (dstaddr);
+      Py_DECREF (result);
+      close (sock);
+      return NULL;
+    }
+
+    if (addr)
+      PyDict_SetItemString (dict, "addr", addr);
+    if (netmask)
+      PyDict_SetItemString (dict, "netmask", netmask);
+    if (braddr)
+      PyDict_SetItemString (dict, "broadcast", braddr);
+    if (dstaddr)
+      PyDict_SetItemString (dict, "peer", dstaddr);
+
     Py_XDECREF (addr);
     Py_XDECREF (netmask);
     Py_XDECREF (braddr);
     Py_XDECREF (dstaddr);
-    Py_DECREF (result);
-    close (sock);
-    return NULL;
-  }
 
-  if (addr)
-    PyDict_SetItemString (dict, "addr", addr);
-  if (netmask)
-    PyDict_SetItemString (dict, "netmask", netmask);
-  if (braddr)
-    PyDict_SetItemString (dict, "broadcast", braddr);
-  if (dstaddr)
-    PyDict_SetItemString (dict, "peer", dstaddr);
-
-  Py_XDECREF (addr);
-  Py_XDECREF (netmask);
-  Py_XDECREF (braddr);
-  Py_XDECREF (dstaddr);
-
-  if (!add_to_family (result, AF_INET, dict)) {
-    Py_DECREF (result);
-    close (sock);
-    return NULL;
+    if (!add_to_family (result, AF_INET, dict)) {
+      Py_DECREF (result);
+      close (sock);
+      return NULL;
+    }
   }
 
   close (sock);
@@ -1155,8 +1179,7 @@ static PyMethodDef methods[] = {
   { NULL, NULL, 0, NULL }
 };
 
-PyMODINIT_FUNC
-initnetifaces (void)
+MODULE_INIT(netifaces)
 {
   PyObject *address_family_dict;
   PyObject *m;
@@ -1167,7 +1190,9 @@ initnetifaces (void)
   WSAStartup(MAKEWORD (2, 2), &wsad);
 #endif
 
-  m = Py_InitModule ("netifaces", methods);
+  MODULE_DEF(m, "netifaces", NULL, methods);
+  if (!m)
+    return MODULE_ERROR;
 
   /* Address families (auto-detect using #ifdef) */
   address_family_dict = PyDict_New();
@@ -1473,4 +1498,6 @@ initnetifaces (void)
 #define STR(x)  _STR(x)
 
   PyModule_AddStringConstant(m, "version", STR(NETIFACES_VERSION));
+
+  MODULE_RETURN(m);
 }
