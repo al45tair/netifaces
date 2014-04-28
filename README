@@ -1,6 +1,8 @@
 netifaces 0.9
 =============
 
+.. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png
+
 1. What is this?
 ----------------
 
@@ -18,9 +20,8 @@ This package attempts to solve that problem.
 2. How do I use it?
 -------------------
 
-First you need to install it, which you can do by typing
+First you need to install it, which you can do by typing::
 
-::
   tar xvzf netifaces-0.9.tar.gz
   cd netifaces-0.9
   python setup.py install
@@ -117,9 +118,9 @@ address.
 --------------------------------------------------
 
 Well, see, here's the thing.  It's been tested on Mac OS X, and it seems to
-work.  (OS X helpfully has some of the ``SIOCGIFxxx`` ``ioctl()``s, which means
+work.  (OS X helpfully has some of the ``SIOCGIFxxx`` ioctls, which means
 that most of those have been tested too, the only glaring exception being the
-``SIOCGIFHWADDR`` ``ioctl()``, which OS X just doesn't have.)
+``SIOCGIFHWADDR`` ioctl, which OS X just doesn't have.)
 
 It should probably work on most of the other UNIX-like systems with relatively
 minor changes.  If you do have to change something, send it to me at
