@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import setuptools
 import os
 import sys
@@ -9,6 +7,15 @@ from setuptools.command.build_ext import build_ext
 from distutils.errors import *
 import pickle
 
+if sys.version_info[0] == 2:
+    def output(*args, **kwargs):
+        end = kwargs.get('end', '\n')
+        f = kwargs.get('file', sys.stdout)
+        f.write(' '.join(str(a) for a in args))
+        f.write(end)
+else:
+    output = getattr(__builtins__, 'print')
+    
 __version__ = "0.8"
 
 # Disable hard links, otherwise building distributions fails on OS X
@@ -49,7 +56,7 @@ class my_build_ext(build_ext):
         if os.path.exists(name):
             os.unlink(name)
         thefile = open(name, 'w')
-        print(contents, file=thefile)
+        thefile.write(contents)
         thefile.close()
 
         sys.stdout.flush()
@@ -109,7 +116,7 @@ class my_build_ext(build_ext):
 
         self.conftestidx = 0
         
-        print("checking for getifaddrs...", end='')
+        output("checking for getifaddrs...", end='')
 
         result = results.get('have_getifaddrs', None)
         if result is not None:
@@ -139,14 +146,14 @@ class my_build_ext(build_ext):
                 result = False
 
         if result:
-            print("found. %s" % cached)
+            output("found. %s" % cached)
             self.compiler.define_macro('HAVE_GETIFADDRS', 1)
         else:
-            print("not found. %s" % cached)
+            output("not found. %s" % cached)
 
         results['have_getifaddrs'] = result
 
-        print("checking for getnameinfo...", end='')
+        output("checking for getnameinfo...", end='')
 
         result = results.get('have_getnameinfo', None)
         if result is not None:
@@ -187,15 +194,15 @@ class my_build_ext(build_ext):
                 result = False
 
         if result:
-            print("found. %s" % cached)
+            output("found. %s" % cached)
             self.compiler.define_macro('HAVE_GETNAMEINFO', 1)
         else:
-            print("not found. %s" % cached)
+            output("not found. %s" % cached)
 
         results['have_getnameinfo'] = result
 
         if not results['have_getifaddrs']:
-            print("checking for socket IOCTLs...", end='')
+            output("checking for socket IOCTLs...", end='')
 
             result = results.get('have_socket_ioctls', None)
             if result is not None:
@@ -251,16 +258,16 @@ class my_build_ext(build_ext):
                         result.append(ioctl)
 
             if result:
-                print("%r. %s" % (result, cached))
+                output("%r. %s" % (result, cached))
                 for ioctl in result:
                     self.compiler.define_macro('HAVE_%s' % ioctl, 1)
                 self.compiler.define_macro('HAVE_SOCKET_IOCTLS', 1)
             else:
-                print("not found. %s" % cached)
+                output("not found. %s" % cached)
 
             results['have_socket_ioctls'] = result
 
-        print("checking for optional header files...", end='')
+        output("checking for optional header files...", end='')
 
         result = results.get('have_headers', None)
         if result is not None:
@@ -290,17 +297,17 @@ class my_build_ext(build_ext):
                     result.append(header)
 
         if result:
-            print("%s. %s" % (' '.join(result), cached))
+            output("%s. %s" % (' '.join(result), cached))
             for header in result:
                 macro = header.upper().replace('.', '_').replace('/', '_')
                 self.compiler.define_macro('HAVE_%s' % macro, 1)
         else:
-            print("none found. %s" % cached)
+            output("none found. %s" % cached)
 
         optional_headers = result
         results['have_headers'] = result
 
-        print("checking whether struct sockaddr has a length field...", end='')
+        output("checking whether struct sockaddr has a length field...", end='')
 
         result = results.get('have_sockaddr_sa_len', None)
         if result is not None:
@@ -323,10 +330,10 @@ class my_build_ext(build_ext):
             result = self.test_build(testrig)
 
         if result:
-            print('yes. %s' % cached)
+            output('yes. %s' % cached)
             self.compiler.define_macro('HAVE_SOCKADDR_SA_LEN', 1)
         else:
-            print('no. %s' % cached)
+            output('no. %s' % cached)
 
         results['have_sockaddr_sa_len'] = result
 
@@ -336,7 +343,7 @@ class my_build_ext(build_ext):
             # however, unfortunately, getifaddrs() doesn't return the
             # lengths, because they're in the sa_len field on just about
             # everything but Linux.
-            print("checking which sockaddr_xxx structs are defined...", end='')
+            output("checking which sockaddr_xxx structs are defined...", end='')
             
             result = results.get('have_sockaddrs', None)
             if result is not None:
@@ -376,12 +383,12 @@ class my_build_ext(build_ext):
                         result.append(sockaddr)
                 
             if result:
-                print('%s. %s' % (' '.join(result), cached))
+                output('%s. %s' % (' '.join(result), cached))
                 for sockaddr in result:
                     self.compiler.define_macro('HAVE_SOCKADDR_%s' \
                                                % sockaddr.upper(), 1)
             else:
-                print('none! %s' % cached)
+                output('none! %s' % cached)
 
             results['have_sockaddrs'] = result
 
