@@ -409,6 +409,7 @@ long_desc = open(readme_path, 'r').read()
 
 setup (name='netifaces',
        version=__version__,
+       zip_safe=True,
        description="Portable network interface information.",
        license="MIT License",
        long_description=long_desc,
