@@ -385,8 +385,8 @@ class my_build_ext(build_ext):
 
             results['have_sockaddrs'] = result
 
-       # Save the results to our config.cache file
-        myfile = open(cache_file, 'w')
+        # Save the results to our config.cache file
+        myfile = open(cache_file, 'wb')
         try:
             pickle.dump(results, myfile)
         finally:
