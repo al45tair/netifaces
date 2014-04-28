@@ -2,6 +2,8 @@ netifaces 0.9
 =============
 
 .. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png
+   :target: https://drone.io/bitbucket.org/al45tair/netifaces/latest
+   :alt: Build Status
 
 1. What is this?
 ----------------
