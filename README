@@ -1,4 +1,4 @@
-netifaces 0.4
+netifaces 0.9
 =============
 
 1. What is this?
@@ -124,18 +124,14 @@ It should probably work on most of the other UNIX-like systems with relatively
 minor changes.  If you do have to change something, send it to me at
 <alastair AT alastairs-place.net> and I'll see if I can merge it in.
 
-It also works just fine on Windows, using the GetAdaptersInfo() function.
-Note, though, that on Windows it isn't possible (yet) to retrieve IPv6
-addresses.  I don't use Windows at the moment, so this isn't a priority for
-me.  If you know how to fix it, drop me a line and I'll consider adding any
-necessary code.
+It also works just fine on Windows, using the GetAdaptersAddresses() function.
 
 4. What license is this under?
 ------------------------------
 
 It's an MIT-style license.  Here goes:
 
-Copyright (c) 2007, 2008 Alastair Houghton
+Copyright (c) 2007-2014 Alastair Houghton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
