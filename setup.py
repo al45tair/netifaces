@@ -99,7 +99,7 @@ class my_build_ext(build_ext):
         # things to test for features is slow
         cache_file = os.path.join(self.build_temp, 'config.cache')
         if os.path.exists(cache_file):
-            myfile = open(cache_file, 'r')
+            myfile = open(cache_file, 'rb')
             try:
                 results = pickle.load(myfile)
             finally:
