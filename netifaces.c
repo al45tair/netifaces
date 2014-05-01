@@ -1319,7 +1319,7 @@ gateways (PyObject *self)
 
 	tuple = PyTuple_Pack (3, gateway, ifname, isdefault);
 
-	if (PyBool_Check (isdefault))
+	if (PyObject_IsTrue (isdefault))
 	  deftuple = PyTuple_Pack (2, gateway, ifname);
 
 	Py_DECREF (gateway);
@@ -1420,7 +1420,7 @@ gateways (PyObject *self)
 
       tuple = PyTuple_Pack (3, gateway, ifname, isdefault);
 
-      if (PyBool_Check (isdefault))
+      if (PyObject_IsTrue (isdefault))
         deftuple = PyTuple_Pack (2, gateway, ifname);
 
       Py_DECREF (gateway);
@@ -1650,7 +1650,7 @@ gateways (PyObject *self)
 
           tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
 
-          if (PyBool_Check (isdefault))
+          if (PyObject_IsTrue (isdefault))
             deftuple = PyTuple_Pack (2, pyaddr, pyifname);
 
           Py_DECREF (pyaddr);
@@ -1798,7 +1798,7 @@ gateways (PyObject *self)
 #endif
           tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
 
-          if (PyBool_Check (isdefault))
+          if (PyObject_IsTrue (isdefault))
             deftuple = PyTuple_Pack (2, pyaddr, pyifname);
 
           Py_DECREF (pyaddr);
@@ -2026,7 +2026,7 @@ gateways (PyObject *self)
 
         tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
 
-        if (PyBool_Check (isdefault))
+        if (PyObject_IsTrue (isdefault))
           deftuple = PyTuple_Pack (2, pyaddr, pyifname);
 
         Py_DECREF (pyaddr);
@@ -2205,7 +2205,7 @@ gateways (PyObject *self)
 
         tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
 
-        if (PyBool_Check (isdefault))
+        if (PyObject_IsTrue (isdefault))
           deftuple = PyTuple_Pack (2, pyaddr, pyifname);
 
         Py_DECREF (pyaddr);
