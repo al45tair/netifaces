@@ -547,7 +547,7 @@ setup (name='netifaces',
        long_description=long_desc,
        author='Alastair Houghton',
        author_email='alastair@alastairs-place.net',
-       url='http://alastairs-place.net/netifaces',
+       url='https://bitbucket.org/al45tair/netifaces',
        classifiers=[
     'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',
