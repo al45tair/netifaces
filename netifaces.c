@@ -8,15 +8,17 @@
 #define MODULE_ERROR            NULL
 #define MODULE_RETURN(v)       return (v)
 #define MODULE_INIT(name)       PyMODINIT_FUNC PyInit_##name(void)
-#define MODULE_DEF(obj,name,doc,methods)                        \
-  static struct PyModuleDef moduledef = {                       \
-    PyModuleDef_HEAD_INIT, (name), (doc), -1, (methods), };     \
+#define MODULE_DEF(name,doc,methods)                        \
+  static struct PyModuleDef moduledef = {                   \
+    PyModuleDef_HEAD_INIT, (name), (doc), -1, (methods), };
+#define MODULE_CREATE(obj,name,doc,methods) \
   obj = PyModule_Create(&moduledef);
 #else /* PY_MAJOR_VERSION < 3 */
 #define MODULE_ERROR
 #define MODULE_RETURN(v)
 #define MODULE_INIT(name)       void init##name(void)
-#define MODULE_DEF(obj,name,doc,methods) \
+#define MODULE_DEF(name,doc,methods)
+#define MODULE_CREATE(obj,name,doc,methods) \
   obj = Py_InitModule3((name), (methods), (doc));
 #endif
 
@@ -2271,6 +2273,8 @@ static PyMethodDef methods[] = {
   { NULL, NULL, 0, NULL }
 };
 
+MODULE_DEF("netifaces", NULL, methods);
+
 MODULE_INIT(netifaces)
 {
   PyObject *address_family_dict;
@@ -2282,7 +2286,7 @@ MODULE_INIT(netifaces)
   WSAStartup(MAKEWORD (2, 2), &wsad);
 #endif
 
-  MODULE_DEF(m, "netifaces", NULL, methods);
+  MODULE_CREATE(m, "netifaces", NULL, methods);
   if (!m)
     return MODULE_ERROR;
 
