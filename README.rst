@@ -116,20 +116,42 @@ instance, be on a Mac, in which case:
 No, that isn't an exceptionally long Ethernet MAC address---it's a FireWire
 address.
 
+As of version 0.10.0, you can also obtain a list of gateways on your
+machine:::
+
+>>> netifaces.gateways()
+{2: [('10.0.1.1', 'en0', True), ('10.2.1.1', 'en1', False)], 30: [('fe80::1', 'en0', True)], 'default': { 2: ('10.0.1.1', 'en0'), 30: ('fe80::1', 'en0') }}
+
+This dictionary is keyed on address family---in this case, ``AF_INET``---and
+each entry is a list of gateways as ``(address, interface, is_default)`` tuples.
+Notice that here we have two separate gateways for IPv4 (``AF_INET``); some
+operating systems support configurations like this and can either route packets
+based on their source, or based on administratively configured routing tables.
+
+For convenience, we also allow you to index the dictionary with the special
+value ``'default'``, which returns a dictionary mapping address families to the
+default gateway in each case.  Thus you can get the default IPv4 gateway with
+
+>>> gws = netifaces.gateways()
+>>> gws['default'][netifaces.AF_INET]
+('10.0.1.1', 'en0')
+
+Do note that there may be no default gateway for any given address family;
+this is currently very common for IPv6 and much less common for IPv4 but it
+can happen even for ``AF_INET``.
+
+BTW, if you're trying to configure your machine to have multiple gateways for
+the same address family, it's a very good idea to check the documentation for
+your operating system *very* carefully, as some systems become extremely
+confused or route packets in a non-obvious manner.
+
 3. This is great!  What platforms does it work on?
 --------------------------------------------------
 
-Well, see, here's the thing.  It's been tested on Mac OS X, and it seems to
-work.  (OS X helpfully has some of the ``SIOCGIFxxx`` ioctls, which means
-that most of those have been tested too, the only glaring exception being the
-``SIOCGIFHWADDR`` ioctl, which OS X just doesn't have.)
-
-It should probably work on most of the other UNIX-like systems with relatively
-minor changes.  If you do have to change something, send it to me at
-<alastair AT alastairs-place.net> and I'll see if I can merge it in.
-
-It also works just fine on Windows, using the ``GetAdaptersAddresses()``
-function.
+It gets regular testing on OS X, Linux and Windows.  It has also been used
+successfully on Solaris, and it's expected to work properly on other UNIX-like
+systems as well.  If you are running something that is not supported, and
+wish to contribute a patch, please use BitBucket to send a pull request.
 
 4. What license is this under?
 ------------------------------

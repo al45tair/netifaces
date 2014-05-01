@@ -97,6 +97,8 @@ class my_build_ext(build_ext):
                 os.dup2(mystderr, 2)
         except CompileError:
             return False
+        except LinkError:
+            return False
         except DistutilsExecError:
             return False
         return result
@@ -391,6 +393,136 @@ class my_build_ext(build_ext):
                 output('none! %s' % cached)
 
             results['have_sockaddrs'] = result
+
+        # Reading routing tables is very OS dependent; check for a few
+        # different approaches.
+        output("checking for routing socket support...", end='')
+
+        result = results.get('have_pf_route', None)
+        if result is not None:
+            cached = '(cached)'
+        else:
+            cached = ''
+
+            testrig = """
+            #include <sys/types.h>
+            #include <sys/socket.h>
+            #include <net/route.h>
+
+            int main (void) {
+              int s = socket (PF_ROUTE, SOCK_RAW, 0);
+              return 0;
+            }
+            """
+
+            result = self.test_build(testrig)
+
+        if result:
+            output('yes. %s' % cached)
+            self.compiler.define_macro('HAVE_PF_ROUTE', 1)
+        else:
+            output('no. %s' % cached)
+
+        results['have_pf_route'] = result
+
+        output("checking for sysctl(CTL_NET...) support...", end='')
+
+        result = results.get('have_sysctl_ctl_net', None)
+        if result is not None:
+            cached = '(cached)'
+        else:
+            cached = ''
+
+            testrig = """
+            #include <sys/types.h>
+            #include <sys/socket.h>
+            #include <sys/sysctl.h>
+            #include <net/route.h>
+
+            int main (void) {
+              int mib[] = { CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_FLAGS,
+                            RTF_UP | RTF_GATEWAY };
+              return 0;
+            }
+            """
+
+            result = self.test_build(testrig)
+
+        if result:
+            output('yes. %s' % cached)
+            self.compiler.define_macro('HAVE_SYSCTL_CTL_NET', 1)
+        else:
+            output('no. %s' % cached)
+
+        results['have_sysctl_ctl_net'] = result
+
+        output("checking for netlink support...", end='')
+
+        result = results.get('have_pf_netlink', None)
+        if result is not None:
+            cached = '(cached)'
+        else:
+            cached = ''
+
+            testrig = """
+            #include <asm/types.h>
+            #include <linux/netlink.h>
+            #include <linux/rtnetlink.h>
+            #include <sys/socket.h>
+
+            int main (void) {
+              int s = socket (PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+              return 0;
+            }
+            """
+
+            result = self.test_build(testrig)
+
+        if result:
+            output('yes. %s' % cached)
+            self.compiler.define_macro('HAVE_PF_NETLINK', 1)
+        else:
+            output('no. %s' %  cached)
+
+        results['have_pf_netlink'] = result
+
+        if results['have_pf_netlink']:
+            output('will use netlink to read routing table')
+        elif results['have_sysctl_ctl_net']:
+            output('will use sysctl() to read routing table')
+        elif results['have_pf_route']:
+            output('will use routing socket to read routing table')
+
+        # Also check for RTF_IFSCOPE
+        output("checking for RTF_IFSCOPE...", end='')
+
+        result = results.get('have_rtf_ifscope', None)
+        if result is not None:
+            cached = '(cached)'
+        else:
+            cached = ''
+
+            testrig = """
+            #include <sys/types.h>
+            #include <sys/socket.h>
+            #include <sys/sysctl.h>
+            #include <net/route.h>
+
+            int main (void) {
+              int scope = RTF_IFSCOPE;
+              return 0;
+            }
+            """
+
+            result = self.test_build(testrig)
+
+        if result:
+            output('yes. %s' % cached)
+            self.compiler.define_macro('HAVE_RTF_IFSCOPE', 1)
+        else:
+            output('no. %s' % cached)
+
+        results['have_rtf_ifscope'] = result
 
         # Save the results to our config.cache file
         myfile = open(cache_file, 'wb')
