@@ -190,6 +190,7 @@ static int af_to_len(int af)
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
 #  include <iphlpapi.h>
+#  include <netioapi.h>
 
 #endif /* defined(WIN32) */
 
@@ -580,11 +581,11 @@ ifaddrs (PyObject *self, PyObject *args)
          pUniAddr;
          pUniAddr = pUniAddr->Next) {
       DWORD dwLen = sizeof (buffer);
-      INT iRet = WSAAddressToString (pUniAddr->Address.lpSockaddr,
-                                     pUniAddr->Address.iSockaddrLength,
-                                     NULL,
-                                     (LPTSTR)buffer,
-                                     &dwLen);
+      INT iRet = WSAAddressToStringA (pUniAddr->Address.lpSockaddr,
+                                      pUniAddr->Address.iSockaddrLength,
+                                      NULL,
+                                      buffer,
+                                      &dwLen);
       PyObject *addr;
       PyObject *mask = NULL;
       PyObject *bcast = NULL;
@@ -658,21 +659,21 @@ ifaddrs (PyObject *self, PyObject *args)
           }
 
           dwLen = sizeof (buffer);
-          iRet = WSAAddressToString ((SOCKADDR *)&maskAddr,
-                                     sizeof (maskAddr),
-                                     NULL,
-                                     (LPTSTR)buffer,
-                                     &dwLen);
+          iRet = WSAAddressToStringA ((SOCKADDR *)&maskAddr,
+				      sizeof (maskAddr),
+				      NULL,
+				      buffer,
+				      &dwLen);
 
           if (iRet == 0)
             mask = PyString_FromString (buffer);
           
           dwLen = sizeof (buffer);
-          iRet = WSAAddressToString ((SOCKADDR *)&bcastAddr,
-                                     sizeof (bcastAddr),
-                                     NULL,
-                                     (LPTSTR)buffer,
-                                     &dwLen);
+          iRet = WSAAddressToStringA ((SOCKADDR *)&bcastAddr,
+				      sizeof (bcastAddr),
+				      NULL,
+				      buffer,
+				      &dwLen);
 
           if (iRet == 0)
             bcast = PyString_FromString (buffer);
@@ -740,21 +741,21 @@ ifaddrs (PyObject *self, PyObject *args)
           }
 
           dwLen = sizeof (buffer);
-          iRet = WSAAddressToString ((SOCKADDR *)&maskAddr,
-                                     sizeof (maskAddr),
-                                     NULL,
-                                     (LPTSTR)buffer,
-                                     &dwLen);
+          iRet = WSAAddressToStringA ((SOCKADDR *)&maskAddr,
+				      sizeof (maskAddr),
+				      NULL,
+				      buffer,
+				      &dwLen);
 
           if (iRet == 0)
             mask = PyString_FromString (buffer);
           
           dwLen = sizeof (buffer);
-          iRet = WSAAddressToString ((SOCKADDR *)&bcastAddr,
-                                     sizeof (bcastAddr),
-                                     NULL,
-                                     (LPTSTR)buffer,
-                                     &dwLen);
+          iRet = WSAAddressToStringA ((SOCKADDR *)&bcastAddr,
+				      sizeof (bcastAddr),
+				      NULL,
+				      buffer,
+				      &dwLen);
 
           if (iRet == 0)
             bcast = PyString_FromString (buffer);
@@ -1212,7 +1213,236 @@ gateways (PyObject *self)
 #if defined(WIN32)
   /* .. Win32 ............................................................... */
 
-  #error Implement me
+  /* We try to access GetIPForwardTable2() and FreeMibTable() through
+     function pointers so that this code will still run on machines
+     running Windows versions prior to Vista.  On those systems, we
+     fall back to the older GetIPForwardTable() API (and can only find
+     IPv4 gateways as a result).
+
+     We also fall back to the older API if the newer code fails for
+     some reason. */
+
+  HANDLE hIpHelper;
+  typedef NTSTATUS (WINAPI *PGETIPFORWARDTABLE2)(ADDRESS_FAMILY Family,
+						 PMIB_IPFORWARD_TABLE2 *pTable);
+  typedef VOID (WINAPI *PFREEMIBTABLE)(PVOID Memory);
+
+  PGETIPFORWARDTABLE2 pGetIpForwardTable2;
+  PFREEMIBTABLE pFreeMibTable;
+
+  hIpHelper = GetModuleHandle (TEXT("iphlpapi.dll"));
+
+  result = NULL;
+  pGetIpForwardTable2 = (PGETIPFORWARDTABLE2)
+    GetProcAddress (hIpHelper, "GetIpForwardTable2");
+  pFreeMibTable = (PFREEMIBTABLE)
+    GetProcAddress (hIpHelper, "FreeMibTable");
+
+  if (pGetIpForwardTable2) {
+    PMIB_IPFORWARD_TABLE2 table;
+    DWORD dwErr = pGetIpForwardTable2 (AF_UNSPEC, &table);
+
+    if (dwErr == NO_ERROR) {
+      DWORD n;
+      BOOL bFirstInet = TRUE, bFirstInet6 = TRUE;
+
+      result = PyDict_New();
+      defaults = PyDict_New();
+      PyDict_SetItemString (result, "default", defaults);
+      Py_DECREF(defaults);
+
+      for (n = 0; n < table->NumEntries; ++n) {
+	MIB_IFROW ifRow;
+	PyObject *ifname;
+	PyObject *gateway;
+	PyObject *isdefault;
+	PyObject *tuple, *deftuple = NULL;
+	char gwbuf[256];
+	WCHAR *pwcsName;
+	DWORD dwFamily = table->Table[n].NextHop.si_family;
+	BOOL bFirst;
+	DWORD dwLen;
+	INT iRet;
+
+	if (table->Table[n].DestinationPrefix.PrefixLength)
+	  continue;
+
+	switch (dwFamily) {
+	case AF_INET:
+	  if (!table->Table[n].NextHop.Ipv4.sin_addr.s_addr)
+	    continue;
+	  break;
+	case AF_INET6:
+	  if (memcmp (&table->Table[n].NextHop.Ipv6.sin6_addr,
+		      &in6addr_any,
+		      sizeof (struct in6_addr)) == 0)
+	    continue;
+	  break;
+	default:
+	  continue;
+	}
+
+	memset (&ifRow, 0, sizeof (ifRow));
+	ifRow.dwIndex = table->Table[n].InterfaceIndex;
+	if (GetIfEntry (&ifRow) != NO_ERROR)
+	  continue;
+
+	dwLen = sizeof (gwbuf);
+	iRet = WSAAddressToStringA ((SOCKADDR *)&table->Table[n].NextHop,
+				    sizeof (table->Table[n].NextHop),
+				    NULL,
+				    gwbuf,
+				    &dwLen);
+
+	if (iRet != NO_ERROR)
+	  continue;
+
+	/* Strip the prefix from the interface name */
+	pwcsName = ifRow.wszName;
+	if (_wcsnicmp (L"\\DEVICE\\TCPIP_", pwcsName, 14) == 0)
+	  pwcsName += 14;
+
+	switch (dwFamily) {
+	case AF_INET:
+	  bFirst = bFirstInet;
+	  bFirstInet = FALSE;
+	  break;
+	case AF_INET6:
+	  bFirst = bFirstInet6;
+	  bFirstInet6 = FALSE;
+	  break;
+	}
+
+	ifname = PyUnicode_FromUnicode (pwcsName, wcslen (pwcsName));
+	gateway = PyString_FromString (gwbuf);
+	isdefault = bFirst ? Py_True : Py_False;
+
+	tuple = PyTuple_Pack (3, gateway, ifname, isdefault);
+
+	if (PyBool_Check (isdefault))
+	  deftuple = PyTuple_Pack (2, gateway, ifname);
+
+	Py_DECREF (gateway);
+	Py_DECREF (ifname);
+
+	if (tuple && !add_to_family (result, dwFamily, tuple)) {
+	  Py_DECREF (deftuple);
+	  Py_DECREF (result);
+	  free (table);
+	  return NULL;
+	}
+
+	if (deftuple) {
+	  PyObject *pyfamily = PyInt_FromLong (dwFamily);
+
+	  PyDict_SetItem (defaults, pyfamily, deftuple);
+
+	  Py_DECREF (pyfamily);
+	  Py_DECREF (deftuple);
+	}
+      }
+
+      pFreeMibTable (table);
+    }
+  }
+
+  if (!result) {
+    PMIB_IPFORWARDTABLE table = NULL;
+    DWORD dwRet;
+    DWORD dwSize = 0;
+    DWORD n;
+    BOOL bFirst = TRUE;
+
+    do {
+      dwRet = GetIpForwardTable (table, &dwSize, FALSE);
+
+      if (dwRet == ERROR_INSUFFICIENT_BUFFER) {
+        PMIB_IPFORWARDTABLE tbl = (PMIB_IPFORWARDTABLE)realloc (table, dwSize);
+
+        if (!tbl) {
+          free (table);
+          PyErr_NoMemory();
+          return NULL;
+        }
+
+	table = tbl;
+      }
+    } while (dwRet == ERROR_INSUFFICIENT_BUFFER);
+
+    if (dwRet != NO_ERROR) {
+      free (table);
+      PyErr_SetFromWindowsErr (dwRet);
+      return NULL;
+    }
+
+    result = PyDict_New();
+    defaults = PyDict_New();
+    PyDict_SetItemString (result, "default", defaults);
+    Py_DECREF(defaults);
+
+    for (n = 0; n < table->dwNumEntries; ++n) {
+      MIB_IFROW ifRow;
+      PyObject *ifname;
+      PyObject *gateway;
+      PyObject *isdefault;
+      PyObject *tuple, *deftuple = NULL;
+      DWORD dwGateway;
+      char gwbuf[16];
+      WCHAR *pwcsName;
+
+      if (table->table[n].dwForwardDest
+          || !table->table[n].dwForwardNextHop
+          || table->table[n].dwForwardType != MIB_IPROUTE_TYPE_INDIRECT)
+        continue;
+
+      memset (&ifRow, 0, sizeof (ifRow));
+      ifRow.dwIndex = table->table[n].dwForwardIfIndex;
+      if (GetIfEntry (&ifRow) != NO_ERROR)
+        continue;
+
+      dwGateway = ntohl (table->table[n].dwForwardNextHop);
+
+      sprintf (gwbuf, "%u.%u.%u.%u",
+	       (dwGateway >> 24) & 0xff,
+	       (dwGateway >> 16) & 0xff,
+	       (dwGateway >> 8) & 0xff,
+	       dwGateway & 0xff);
+
+      /* Strip the prefix from the interface name */
+      pwcsName = ifRow.wszName;
+      if (_wcsnicmp (L"\\DEVICE\\TCPIP_", pwcsName, 14) == 0)
+	pwcsName += 14;
+
+      ifname = PyUnicode_FromUnicode (pwcsName, wcslen (pwcsName));
+      gateway = PyString_FromString (gwbuf);
+      isdefault = bFirst ? Py_True : Py_False;
+      bFirst = FALSE;
+
+      tuple = PyTuple_Pack (3, gateway, ifname, isdefault);
+
+      if (PyBool_Check (isdefault))
+        deftuple = PyTuple_Pack (2, gateway, ifname);
+
+      Py_DECREF (gateway);
+      Py_DECREF (ifname);
+
+      if (tuple && !add_to_family (result, AF_INET, tuple)) {
+        Py_DECREF (deftuple);
+        Py_DECREF (result);
+        free (table);
+        return NULL;
+      }
+
+      if (deftuple) {
+        PyObject *pyfamily = PyInt_FromLong (AF_INET);
+
+        PyDict_SetItem (defaults, pyfamily, deftuple);
+
+        Py_DECREF (pyfamily);
+        Py_DECREF (deftuple);
+      }
+    }
+  }
 #elif defined(HAVE_PF_NETLINK)
   /* .. Linux (PF_NETLINK socket) ........................................... */
 
@@ -1437,7 +1667,7 @@ gateways (PyObject *self)
           if (deftuple) {
             PyObject *pyfamily = PyInt_FromLong (pmsg->rt.rtm_family);
 
-            PyDict_SetItem  (defaults, pyfamily, deftuple);
+            PyDict_SetItem (defaults, pyfamily, deftuple);
 
             Py_DECREF (pyfamily);
             Py_DECREF (deftuple);
