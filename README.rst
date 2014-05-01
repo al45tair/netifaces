@@ -145,6 +145,12 @@ the same address family, it's a very good idea to check the documentation for
 your operating system *very* carefully, as some systems become extremely
 confused or route packets in a non-obvious manner.
 
+I'm very interested in hearing from anyone (on any platform) for whom the
+``gateways()`` method doesn't produce the expected results.  It's quite
+complicated extracting this information from the operating system (whichever
+operating system we're talking about), and so I expect there's at least one
+system out there where this just won't work.
+
 3. This is great!  What platforms does it work on?
 --------------------------------------------------
 
