@@ -117,7 +117,7 @@ No, that isn't an exceptionally long Ethernet MAC address---it's a FireWire
 address.
 
 As of version 0.10.0, you can also obtain a list of gateways on your
-machine:::
+machine:
 
 >>> netifaces.gateways()
 {2: [('10.0.1.1', 'en0', True), ('10.2.1.1', 'en1', False)], 30: [('fe80::1', 'en0', True)], 'default': { 2: ('10.0.1.1', 'en0'), 30: ('fe80::1', 'en0') }}
