@@ -40,6 +40,7 @@
 #    include <asm/types.h>
 #    include <linux/netlink.h>
 #    include <linux/rtnetlink.h>
+#    include <arpa/inet.h>
 #  endif
 
 #  if HAVE_SOCKET_IOCTLS
@@ -53,7 +54,8 @@
 #    endif
 #  endif /* HAVE_SOCKET_IOCTLS */
 
-/* For logical interfaces support we convert all names to same name prefixed with l */
+/* For logical interfaces support we convert all names to same name prefixed
+   with l */
 #if HAVE_SIOCGLIFNUM
 #define CNAME(x) l##x
 #else
@@ -213,6 +215,8 @@ static int af_to_len(int af)
 #  define HAVE_AF_LINK 1
 #endif
 
+/* -- Utility Functions ----------------------------------------------------- */
+
 #if !defined(WIN32)
 #if  !HAVE_GETNAMEINFO
 #undef getnameinfo
@@ -319,9 +323,9 @@ string_from_sockaddr (struct sockaddr *addr,
     return -1;
 
   if (SA_LEN(addr) < af_to_len(addr->sa_family)) {
-    /* Someteims ifa_netmask can be truncated. So let's detruncate it.  FreeBSD
-     * PR: kern/152036: getifaddrs(3) returns truncated sockaddrs for netmasks
-     * -- http://www.freebsd.org/cgi/query-pr.cgi?pr=152036 */
+    /* Sometimes ifa_netmask can be truncated. So let's detruncate it.  FreeBSD
+       PR: kern/152036: getifaddrs(3) returns truncated sockaddrs for netmasks
+       -- http://www.freebsd.org/cgi/query-pr.cgi?pr=152036 */
     gnilen = af_to_len(addr->sa_family);
     bigaddr = calloc(1, gnilen);
     if (!bigaddr)
@@ -472,6 +476,8 @@ add_to_family (PyObject *result, int family, PyObject *obj)
   return TRUE;
 }
 
+/* -- ifaddresses() --------------------------------------------------------- */
+
 static PyObject *
 ifaddrs (PyObject *self, PyObject *args)
 {
@@ -497,6 +503,8 @@ ifaddrs (PyObject *self, PyObject *args)
     return NULL;
 
 #if defined(WIN32)
+  /* .. Win32 ............................................................... */
+
   /* First, retrieve the adapter information.  We do this in a loop, in
      case someone adds or removes adapters in the meantime. */
   do {
@@ -791,6 +799,8 @@ ifaddrs (PyObject *self, PyObject *args)
 
   free ((void *)pAdapterAddresses);
 #elif HAVE_GETIFADDRS
+  /* .. UNIX, with getifaddrs() ............................................. */
+
   if (getifaddrs (&addrs) < 0) {
     Py_DECREF (result);
     PyErr_SetFromErrno (PyExc_OSError);
@@ -862,6 +872,7 @@ ifaddrs (PyObject *self, PyObject *args)
 
   freeifaddrs (addrs);
 #elif HAVE_SOCKET_IOCTLS
+  /* .. UNIX, with SIOC ioctls() ............................................ */
   
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -1018,12 +1029,16 @@ ifaddrs (PyObject *self, PyObject *args)
   }
 }
 
+/* -- interfaces() ---------------------------------------------------------- */
+
 static PyObject *
 interfaces (PyObject *self)
 {
   PyObject *result;
 
 #if defined(WIN32)
+  /* .. Win32 ............................................................... */
+
   PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, pInfo = NULL;
   ULONG ulBufferLength = 0;
   DWORD dwRet;
@@ -1071,6 +1086,8 @@ interfaces (PyObject *self)
 
   free (pAdapterAddresses);
 #elif HAVE_GETIFADDRS
+  /* .. UNIX, with getifaddrs() ............................................. */
+
   const char *prev_name = NULL;
   struct ifaddrs *addrs = NULL;
   struct ifaddrs *addr = NULL;
@@ -1096,6 +1113,8 @@ interfaces (PyObject *self)
 
   freeifaddrs (addrs);
 #elif HAVE_SIOCGIFCONF
+  /* .. UNIX, with SIOC ioctl()s ............................................ */
+
   const char *prev_name = NULL;
   int fd = socket (AF_INET, SOCK_DGRAM, 0);
   struct CNAME(ifconf) ifc;
@@ -1183,16 +1202,259 @@ interfaces (PyObject *self)
   return result;
 }
 
+/* -- gateways() ------------------------------------------------------------ */
+
 static PyObject *
 gateways (PyObject *self)
 {
   PyObject *result, *defaults;
 
 #if defined(WIN32)
+  /* .. Win32 ............................................................... */
+
   #error Implement me
 #elif defined(HAVE_PF_NETLINK)
-  #error Implement me
+  /* .. Linux (PF_NETLINK socket) ........................................... */
+
+  /* PF_NETLINK is pretty poorly documented and it looks to be quite easy to
+     get wrong.  This *appears* to be the right way to do it, even though a
+     lot of the code out there on the 'Net is very different! */
+
+  struct routing_msg {
+    struct nlmsghdr hdr;
+    struct rtmsg    rt;
+    char            data[0];
+  } *pmsg, *msgbuf;
+  int s;
+  int seq = 0;
+  ssize_t ret;
+  struct sockaddr_nl sanl;
+  static const struct sockaddr_nl sanl_kernel = { .nl_family = AF_NETLINK };
+  socklen_t sanl_len;
+  int pagesize = getpagesize();
+  int bufsize = pagesize < 8192 ? pagesize : 8192;
+  int is_multi = 0;
+  int interrupted = 0;
+
+  result = PyDict_New();
+  defaults = PyDict_New();
+  PyDict_SetItemString (result, "default", defaults);
+  Py_DECREF (defaults);
+
+  msgbuf = pmsg = (struct routing_msg *)malloc (bufsize);
+
+  if (!pmsg) {
+    PyErr_NoMemory ();
+    Py_DECREF (result);
+    return NULL;
+  }
+
+  s = socket (PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+
+  if (s < 0) {
+    PyErr_SetFromErrno (PyExc_OSError);
+    Py_DECREF (result);
+    free (msgbuf);
+    return NULL;
+  }
+
+  sanl.nl_family = AF_NETLINK;
+  sanl.nl_groups = 0;
+  sanl.nl_pid = 0;
+
+  if (bind (s, (struct sockaddr *)&sanl, sizeof (sanl)) < 0) {
+    PyErr_SetFromErrno (PyExc_OSError);
+    Py_DECREF (result);
+    free (msgbuf);
+    close (s);
+    return NULL;
+  }
+
+  sanl_len = sizeof (sanl);
+  if (getsockname (s, (struct sockaddr *)&sanl, &sanl_len) < 0) {
+    PyErr_SetFromErrno  (PyExc_OSError);
+    Py_DECREF (result);
+    free (msgbuf);
+    close (s);
+    return NULL;
+  }
+
+  do {
+    interrupted = 0;
+
+    memset (pmsg, 0, sizeof (struct routing_msg));
+    pmsg->hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+    pmsg->hdr.nlmsg_flags = NLM_F_DUMP | NLM_F_REQUEST;
+    pmsg->hdr.nlmsg_seq = ++seq;
+    pmsg->hdr.nlmsg_type = RTM_GETROUTE;
+    pmsg->hdr.nlmsg_pid = 0;
+
+    pmsg->rt.rtm_family = 0;
+
+    if (sendto (s, pmsg, pmsg->hdr.nlmsg_len, 0,
+                (struct sockaddr *)&sanl_kernel, sizeof(sanl_kernel)) < 0) {
+      PyErr_SetFromErrno  (PyExc_OSError);
+      Py_DECREF (result);
+      free (msgbuf);
+      close (s);
+      return NULL;
+    }
+
+    do {
+      struct sockaddr_nl sanl_from;
+      struct iovec iov = { pmsg, bufsize };
+      struct msghdr msghdr = {
+        &sanl_from,
+        sizeof(sanl_from),
+        &iov,
+        1,
+        NULL,
+        0,
+        0
+      };
+      int nllen;
+
+      ret = recvmsg (s, &msghdr, 0);
+
+      if (msghdr.msg_flags & MSG_TRUNC) {
+        PyErr_SetString (PyExc_OSError, "netlink message truncated");
+        Py_DECREF (result);
+        free (msgbuf);
+        close (s);
+        return NULL;
+      }
+
+      if (ret < 0) {
+        PyErr_SetFromErrno (PyExc_OSError);
+        Py_DECREF (result);
+        free (msgbuf);
+        close (s);
+        return NULL;
+      }
+
+      nllen = ret;
+      while (NLMSG_OK (&pmsg->hdr, nllen)) {
+        void *dst = NULL;
+        void *gw = NULL;
+        int ifndx = -1;
+        struct rtattr *attrs, *attr;
+        int len;
+
+        /* Ignore messages not for us */
+        if (pmsg->hdr.nlmsg_seq != seq || pmsg->hdr.nlmsg_pid != sanl.nl_pid)
+          goto next;
+
+        if (pmsg->hdr.nlmsg_flags & NLM_F_DUMP_INTR) {
+          /* The dump was interrupted by a signal; we need to go round again */
+          interrupted = 1;
+          is_multi = 0;
+          break;
+        }
+
+        is_multi = pmsg->hdr.nlmsg_flags & NLM_F_MULTI;
+
+        if (pmsg->hdr.nlmsg_type == NLMSG_DONE) {
+          is_multi = interrupted = 0;
+          break;
+        }
+
+        if (pmsg->hdr.nlmsg_type == NLMSG_ERROR) {
+          struct nlmsgerr *perr = (struct nlmsgerr *)&pmsg->rt;
+          errno = -perr->error;
+          PyErr_SetFromErrno (PyExc_OSError);
+          Py_DECREF (result);
+          free (msgbuf);
+          close (s);
+          return NULL;
+        }
+
+        attr = attrs = RTM_RTA(&pmsg->rt);
+        len = RTM_PAYLOAD(&pmsg->hdr);
+
+        while (RTA_OK(attr, len)) {
+          switch (attr->rta_type) {
+          case RTA_GATEWAY:
+            gw = RTA_DATA(attr);
+            break;
+          case RTA_DST:
+            dst = RTA_DATA(attr);
+            break;
+          case RTA_OIF:
+            ifndx = *(int *)RTA_DATA(attr);
+            break;
+          default:
+            break;
+          }
+
+          attr = RTA_NEXT(attr, len);
+        }
+
+        /* We're looking for gateways with no destination */
+        if (!dst && gw && ifndx >= 0) {
+          char buffer[256];
+          char ifnamebuf[IF_NAMESIZE];
+          char *ifname;
+          const char *addr;
+          PyObject *pyifname;
+          PyObject *pyaddr;
+          PyObject *isdefault;
+          PyObject *tuple = NULL, *deftuple = NULL;
+
+          ifname = if_indextoname (ifndx, ifnamebuf);
+
+          if (!ifname)
+            goto next;
+
+          addr = inet_ntop (pmsg->rt.rtm_family, gw, buffer, sizeof (buffer));
+
+          if (!addr)
+            goto next;
+
+          /* We set isdefault to True if this route came from the main table;
+             this should correspond with the way most people set up alternate
+             routing tables on Linux. */
+
+          isdefault = pmsg->rt.rtm_table == RT_TABLE_MAIN ? Py_True : Py_False;
+          pyifname = PyString_FromString (ifname);
+          pyaddr = PyString_FromString (buffer);
+
+          tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
+
+          if (PyBool_Check (isdefault))
+            deftuple = PyTuple_Pack (2, pyaddr, pyifname);
+
+          Py_DECREF (pyaddr);
+          Py_DECREF (pyifname);
+
+          if (tuple && !add_to_family (result, pmsg->rt.rtm_family, tuple)) {
+            Py_DECREF (deftuple);
+            Py_DECREF (result);
+            free (msgbuf);
+            close (s);
+            return NULL;
+          }
+
+          if (deftuple) {
+            PyObject *pyfamily = PyInt_FromLong (pmsg->rt.rtm_family);
+
+            PyDict_SetItem  (defaults, pyfamily, deftuple);
+
+            Py_DECREF (pyfamily);
+            Py_DECREF (deftuple);
+          }
+        }
+
+      next:
+	pmsg = (struct routing_msg *)NLMSG_NEXT(&pmsg->hdr, nllen);
+      }
+    } while (is_multi);
+  } while (interrupted);
+
+  free (msgbuf);
+  close (s);
 #elif defined(HAVE_SYSCTL_CTL_NET)
+  /* .. UNIX, via sysctl() .................................................. */
+
   int mib[] = { CTL_NET, PF_ROUTE, 0, 0, NET_RT_FLAGS,
                 RTF_UP | RTF_GATEWAY };
   size_t len;
@@ -1204,7 +1466,7 @@ gateways (PyObject *self)
   result = PyDict_New();
   defaults = PyDict_New();
   PyDict_SetItemString (result, "default", defaults);
-  Py_DECREF(defaults);
+  Py_DECREF (defaults);
 
   /* Remembering that the routing table may change while we're reading it,
      we need to do this in a loop until we succeed. */
@@ -1341,10 +1603,15 @@ gateways (PyObject *self)
 
   free (buffer);
 #elif defined(HAVE_PF_ROUTE)
+  /* .. UNIX, via PF_ROUTE socket ........................................... */
+
   /* The PF_ROUTE code will only retrieve gateway information for AF_INET and
      AF_INET6.  This is because it would need to loop through all possible
      values, and the messages it needs to send in each case are potentially
-     different. */
+     different.  It is also very likely to return a maximum of one gateway
+     in each case (since we can't read the entire routing table this way, we
+     can only ask about routes). */
+
   int pagesize = getpagesize();
   int bufsize = pagesize < 8192 ? 8192 : pagesize;
   struct rt_msghdr *pmsg;
@@ -1555,6 +1822,10 @@ gateways (PyObject *self)
     }
   }
 
+  /* The code below is very similar to, but not identical to, the code above.
+     We could probably refactor some of it, but take care---there are subtle
+     differences! */
+
 #ifdef AF_INET6
   /* AF_INET6 now */
   msglen = (sizeof (struct rt_msghdr)
@@ -1741,6 +2012,8 @@ gateways (PyObject *self)
 
   return result;
 }
+
+/* -- Python Module --------------------------------------------------------- */
 
 static PyMethodDef methods[] = {
   { "ifaddresses", (PyCFunction)ifaddrs, METH_VARARGS,
