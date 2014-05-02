@@ -11,7 +11,8 @@ for iface in netifaces.interfaces():
 
     print('Interface %s:' % iface)
 
-    for family,addrs in allAddrs.iteritems():
+    for family in allAddrs:
+        addrs = allAddrs[family]
         fam_name = netifaces.address_families[family]
         print('  Address family: %s' % fam_name)
         for addr in addrs:
