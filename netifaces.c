@@ -1253,6 +1253,9 @@ gateways (PyObject *self)
       PyDict_SetItemString (result, "default", defaults);
       Py_DECREF(defaults);
 
+      /* This prevents a crash on PyPy */
+      defaults = PyDict_GetItemString (result, "default");
+
       for (n = 0; n < table->NumEntries; ++n) {
 	MIB_IFROW ifRow;
 	PyObject *ifname;
@@ -1382,6 +1385,9 @@ gateways (PyObject *self)
     PyDict_SetItemString (result, "default", defaults);
     Py_DECREF(defaults);
 
+    /* This prevents a crash on PyPy */
+    defaults = PyDict_GetItemString (result, "default");
+
     for (n = 0; n < table->dwNumEntries; ++n) {
       MIB_IFROW ifRow;
       PyObject *ifname;
@@ -1472,6 +1478,9 @@ gateways (PyObject *self)
   defaults = PyDict_New();
   PyDict_SetItemString (result, "default", defaults);
   Py_DECREF (defaults);
+
+  /* This prevents a crash on PyPy */
+  defaults = PyDict_GetItemString (result, "default");
 
   msgbuf = pmsg = (struct routing_msg *)malloc (bufsize);
 
@@ -1699,6 +1708,9 @@ gateways (PyObject *self)
   defaults = PyDict_New();
   PyDict_SetItemString (result, "default", defaults);
   Py_DECREF (defaults);
+
+  /* This prevents a crash on PyPy */
+  defaults = PyDict_GetItemString (result, "default");
 
   /* Remembering that the routing table may change while we're reading it,
      we need to do this in a loop until we succeed. */
