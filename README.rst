@@ -1,4 +1,4 @@
-netifaces 0.10.0
+netifaces 0.10.1
 ================
 
 .. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png

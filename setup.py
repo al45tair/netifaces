@@ -16,7 +16,7 @@ if sys.version_info[0] == 2:
 else:
     output = getattr(__builtins__, 'print')
     
-__version__ = "0.10.0"
+__version__ = "0.10.1"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
