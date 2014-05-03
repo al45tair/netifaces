@@ -1,3 +1,9 @@
+2014-05-03	Version 0.10.2
+
+	* Added a workaround for broken netlink headers on certain Linux
+	distributions (the problem being that the netlink headers fail to
+	include <bits/sockaddr.h>, which causes a build failure).
+
 2014-05-02	Version 0.10.1
 
 	* Fixed a problem with the gateways() function that caused it a
