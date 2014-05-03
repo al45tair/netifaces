@@ -16,7 +16,7 @@ if sys.version_info[0] == 2:
 else:
     output = getattr(__builtins__, 'print')
     
-__version__ = "0.10.1"
+__version__ = "0.10.2"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
@@ -466,9 +466,9 @@ class my_build_ext(build_ext):
 
             testrig = """
             #include <asm/types.h>
+            #include <sys/socket.h>
             #include <linux/netlink.h>
             #include <linux/rtnetlink.h>
-            #include <sys/socket.h>
 
             int main (void) {
               int s = socket (PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
