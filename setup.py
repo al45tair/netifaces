@@ -410,6 +410,7 @@ class my_build_ext(build_ext):
             #include <net/route.h>
 
             int main (void) {
+              struct rt_msghdr msg;
               int s = socket (PF_ROUTE, SOCK_RAW, 0);
               return 0;
             }
