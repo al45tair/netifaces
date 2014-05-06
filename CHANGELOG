@@ -1,3 +1,8 @@
+2014-05-06	Version 0.10.3
+
+	* When using Netlink (i.e. Linux), check for the constant
+	NLM_F_DUMP_INTR, since it only appeared in kernel version 3.1
+	
 2014-05-03	Version 0.10.2
 
 	* Added a workaround for broken netlink headers on certain Linux

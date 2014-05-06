@@ -1585,12 +1585,15 @@ gateways (PyObject *self)
         if (pmsg->hdr.nlmsg_seq != seq || pmsg->hdr.nlmsg_pid != sanl.nl_pid)
           goto next;
 
+        /* This is only defined on Linux kernel versions 3.1 and higher */
+#ifdef NLM_F_DUMP_INTR
         if (pmsg->hdr.nlmsg_flags & NLM_F_DUMP_INTR) {
           /* The dump was interrupted by a signal; we need to go round again */
           interrupted = 1;
           is_multi = 0;
           break;
         }
+#endif
 
         is_multi = pmsg->hdr.nlmsg_flags & NLM_F_MULTI;
 
@@ -1805,7 +1808,7 @@ gateways (PyObject *self)
 
         if (string_from_sockaddr (sa, buffer, sizeof(buffer)) == 0) {
           PyObject *pyaddr = PyString_FromString (buffer);
-#if HAVE_RTF_IFSCOPE
+#ifdef RTF_IFSCOPE
           PyObject *isdefault = PyBool_FromLong (!(msg->rtm_flags & RTF_IFSCOPE));
 #else
           PyObject *isdefault = Py_INCREF(Py_True);
@@ -2031,7 +2034,7 @@ gateways (PyObject *self)
                                 buffer, sizeof(buffer)) == 0) {
         PyObject *pyifname = PyString_FromString (ifname);
         PyObject *pyaddr = PyString_FromString (buffer);
-#if HAVE_RTF_IFSCOPE
+#ifdef RTF_IFSCOPE
         PyObject *isdefault = PyBool_FromLong (!(pmsg->rtm_flags & RTF_IFSCOPE));
 #else
         PyObject *isdefault = Py_True;
@@ -2210,7 +2213,7 @@ gateways (PyObject *self)
                                 buffer, sizeof(buffer)) == 0) {
         PyObject *pyifname = PyString_FromString (ifname);
         PyObject *pyaddr = PyString_FromString (buffer);
-#if HAVE_RTF_IFSCOPE
+#ifdef RTF_IFSCOPE
         PyObject *isdefault = PyBool_FromLong (!(pmsg->rtm_flags & RTF_IFSCOPE));
 #else
         PyObject *isdefault = Py_True;

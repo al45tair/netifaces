@@ -16,7 +16,7 @@ if sys.version_info[0] == 2:
 else:
     output = getattr(__builtins__, 'print')
     
-__version__ = "0.10.2"
+__version__ = "0.10.3"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
@@ -492,37 +492,6 @@ class my_build_ext(build_ext):
             output('will use sysctl() to read routing table')
         elif results['have_pf_route']:
             output('will use routing socket to read routing table')
-
-        # Also check for RTF_IFSCOPE
-        output("checking for RTF_IFSCOPE...", end='')
-
-        result = results.get('have_rtf_ifscope', None)
-        if result is not None:
-            cached = '(cached)'
-        else:
-            cached = ''
-
-            testrig = """
-            #include <sys/types.h>
-            #include <sys/socket.h>
-            #include <sys/sysctl.h>
-            #include <net/route.h>
-
-            int main (void) {
-              int scope = RTF_IFSCOPE;
-              return 0;
-            }
-            """
-
-            result = self.test_build(testrig)
-
-        if result:
-            output('yes. %s' % cached)
-            self.compiler.define_macro('HAVE_RTF_IFSCOPE', 1)
-        else:
-            output('no. %s' % cached)
-
-        results['have_rtf_ifscope'] = result
 
         # Save the results to our config.cache file
         myfile = open(cache_file, 'wb')
