@@ -1482,9 +1482,9 @@ gateways (PyObject *self)
   /* This prevents a crash on PyPy */
   defaults = PyDict_GetItemString (result, "default");
 
-  msgbuf = pmsg = (struct routing_msg *)malloc (bufsize);
+  msgbuf = (struct routing_msg *)malloc (bufsize);
 
-  if (!pmsg) {
+  if (!msgbuf) {
     PyErr_NoMemory ();
     Py_DECREF (result);
     return NULL;
@@ -1523,6 +1523,7 @@ gateways (PyObject *self)
   do {
     interrupted = 0;
 
+    pmsg = msgbuf;
     memset (pmsg, 0, sizeof (struct routing_msg));
     pmsg->hdr.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
     pmsg->hdr.nlmsg_flags = NLM_F_DUMP | NLM_F_REQUEST;
