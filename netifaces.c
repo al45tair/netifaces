@@ -1544,7 +1544,7 @@ gateways (PyObject *self)
 
     do {
       struct sockaddr_nl sanl_from;
-      struct iovec iov = { pmsg, bufsize };
+      struct iovec iov = { msgbuf, bufsize };
       struct msghdr msghdr = {
         &sanl_from,
         sizeof(sanl_from),
@@ -1575,6 +1575,7 @@ gateways (PyObject *self)
       }
 
       nllen = ret;
+      pmsg = msgbuf;
       while (NLMSG_OK (&pmsg->hdr, nllen)) {
         void *dst = NULL;
         void *gw = NULL;
