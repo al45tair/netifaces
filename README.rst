@@ -1,4 +1,4 @@
-netifaces 0.10.3
+netifaces 0.10.4
 ================
 
 .. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png
@@ -24,8 +24,8 @@ This package attempts to solve that problem.
 
 First you need to install it, which you can do by typing::
 
-  tar xvzf netifaces-0.10.3.tar.gz
-  cd netifaces-0.10.3
+  tar xvzf netifaces-0.10.4.tar.gz
+  cd netifaces-0.10.4
   python setup.py install
 
 Once that's done, you'll need to start Python and do something like the
