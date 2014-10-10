@@ -1813,7 +1813,8 @@ gateways (PyObject *self)
 #ifdef RTF_IFSCOPE
           PyObject *isdefault = PyBool_FromLong (!(msg->rtm_flags & RTF_IFSCOPE));
 #else
-          PyObject *isdefault = Py_INCREF(Py_True);
+          Py_INCREF(Py_True);
+          PyObject *isdefault = Py_True;
 #endif
           tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
 
