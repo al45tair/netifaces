@@ -14,7 +14,9 @@ if sys.version_info[0] == 2:
         f.write(' '.join(str(a) for a in args))
         f.write(end)
 else:
-    output = getattr(__builtins__, 'print')
+    import __builtin__
+    
+    output = getattr(__builtin__, 'print')
     
 __version__ = "0.10.4"
 
