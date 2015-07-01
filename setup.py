@@ -22,7 +22,7 @@ else:
         
     output = getattr(builtins, 'print')
     
-__version__ = "0.10.4"
+__version__ = "0.10.5"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
@@ -209,6 +209,63 @@ class my_build_ext(build_ext):
 
         results['have_getnameinfo'] = result
 
+        if results['have_getifaddrs']:
+            output("checking for IPv6 socket IOCTLs...", end='')
+
+            result = results.get('have_ipv6_socket_ioctls', None)
+            if result is not None:
+                cached = '(cached)'
+            else:
+                cached = ''
+
+                if not os.path.exists(self.build_temp):
+                    os.makedirs(self.build_temp)
+                outname = os.path.join(self.build_temp, 'conftest4.out')
+                self.ctout = os.open(outname, os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+
+                result = []
+                ioctls = ('SIOCGIFAFLAG_IN6',)
+                added_includes = ""
+                if mos.startswith('sunos'):
+                    added_includes = """
+                     #include <unistd.h>
+                     #include <stropts.h>
+                     #include <sys/sockio.h>
+                    """
+
+                for ioctl in ioctls:
+                    testrig = """
+                    #include <sys/types.h>
+                    #include <sys/socket.h>
+                    #include <sys/ioctl.h>
+                    #include <net/if.h>
+                    #include <netinet/in.h>
+                    #include <netinet/in_var.h>
+                    #include <arpa/inet.h>
+                    %(addedinc)s
+                    int main(void) {
+                        int fd = socket (AF_INET6, SOCK_DGRAM, IPPROTO_IPV6);
+                        struct in6_ifreq ifreq;
+
+                        ioctl(fd, %(ioctl)s, &ifreq);
+
+                        return 0;
+                    }
+                    """ % { 'ioctl': ioctl , 'addedinc': added_includes}
+
+                    if self.test_build(testrig,libraries=libraries):
+                        result.append(ioctl)
+
+            if result:
+                output("%r. %s" % (result, cached))
+                for ioctl in result:
+                    self.compiler.define_macro('HAVE_%s' % ioctl, 1)
+                self.compiler.define_macro('HAVE_IPV6_SOCKET_IOCTLS', 1)
+            else:
+                output("not found. %s" % cached)
+
+            results['have_ipv6_socket_ioctls'] = result
+
         if not results['have_getifaddrs']:
             output("checking for socket IOCTLs...", end='')
 
@@ -361,7 +418,7 @@ class my_build_ext(build_ext):
 
                 if not os.path.exists(self.build_temp):
                     os.makedirs(self.build_temp)
-                outname = os.path.join(self.build_temp, 'conftest4.out')
+                outname = os.path.join(self.build_temp, 'conftest5.out')
                 self.ctout = os.open(outname, os.O_RDWR | os.O_CREAT | os.O_TRUNC)
 
                 sockaddrs = ('at', 'ax25', 'dl', 'eon', 'in', 'in6',
