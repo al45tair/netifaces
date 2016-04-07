@@ -1673,7 +1673,7 @@ gateways (PyObject *self)
           Py_DECREF (pyifname);
 
           if (tuple && !add_to_family (result, pmsg->rt.rtm_family, tuple)) {
-            Py_DECREF (deftuple);
+            Py_XDECREF (deftuple);
             Py_DECREF (result);
             free (msgbuf);
             close (s);
