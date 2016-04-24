@@ -20,7 +20,7 @@ else:
         import __builtin__
         builtins = __builtin__
         
-    output = getattr(builtins, 'print')
+    output = getattr(builtins, 'print', lambda x: True)
     
 __version__ = "0.10.4"
 
