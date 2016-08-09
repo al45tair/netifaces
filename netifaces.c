@@ -397,7 +397,8 @@ string_from_sockaddr (struct sockaddr *addr,
       sprintf (ptr, "%02x:", data[n] & 0xff);
       ptr += 3;
     }
-    *--ptr = '\0';
+    if (len)
+      *--ptr = '\0';
   }
 
   if (!buffer[0])
