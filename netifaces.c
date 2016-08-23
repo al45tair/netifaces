@@ -858,6 +858,8 @@ ifaddrs (PyObject *self, PyObject *args)
       if (ioctl (sock6, SIOCGIFAFLAG_IN6, &ifr6) >= 0) {
         flags = PyLong_FromUnsignedLong (ifr6.ifr_ifru.ifru_flags6);
       }
+
+      close (sock6);
     }
 
     if (string_from_sockaddr (addr->ifa_addr, buffer, sizeof (buffer)) == 0)
