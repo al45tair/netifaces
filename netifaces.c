@@ -837,6 +837,7 @@ ifaddrs (PyObject *self, PyObject *args)
     if (!addr->ifa_addr)
       continue;
       
+#if HAVE_IPV6_SOCKET_IOCTLS
     /* For IPv6 addresses we try to get the flags. */
     if (addr->ifa_addr->sa_family == AF_INET6) {
       struct sockaddr_in6 *sin;
@@ -861,6 +862,7 @@ ifaddrs (PyObject *self, PyObject *args)
 
       close (sock6);
     }
+#endif /* HAVE_IPV6_SOCKET_IOCTLS */
 
     if (string_from_sockaddr (addr->ifa_addr, buffer, sizeof (buffer)) == 0)
       pyaddr = PyString_FromString (buffer);
@@ -1512,6 +1514,9 @@ gateways (PyObject *self)
   int bufsize = pagesize < 8192 ? pagesize : 8192;
   int is_multi = 0;
   int interrupted = 0;
+  int def_priorities[RTNL_FAMILY_MAX];
+
+  memset(def_priorities, 0xff, sizeof(def_priorities));
 
   result = PyDict_New();
   defaults = PyDict_New();
@@ -1621,6 +1626,7 @@ gateways (PyObject *self)
         int ifndx = -1;
         struct rtattr *attrs, *attr;
         int len;
+        int priority;
 
         /* Ignore messages not for us */
         if (pmsg->hdr.nlmsg_seq != seq || pmsg->hdr.nlmsg_pid != sanl.nl_pid)
@@ -1655,7 +1661,7 @@ gateways (PyObject *self)
 
         attr = attrs = RTM_RTA(&pmsg->rt);
         len = RTM_PAYLOAD(&pmsg->hdr);
-
+        priority = -1;
         while (RTA_OK(attr, len)) {
           switch (attr->rta_type) {
           case RTA_GATEWAY:
@@ -1666,6 +1672,9 @@ gateways (PyObject *self)
             break;
           case RTA_OIF:
             ifndx = *(int *)RTA_DATA(attr);
+            break;
+          case RTA_PRIORITY:
+            priority = *(int *)RTA_DATA(attr);
             break;
           default:
             break;
@@ -1700,6 +1709,19 @@ gateways (PyObject *self)
              routing tables on Linux. */
 
           isdefault = pmsg->rt.rtm_table == RT_TABLE_MAIN ? Py_True : Py_False;
+
+          /* Try to pick the active default route based on priority (which
+             is displayed in the UI as "metric", confusingly) */
+          if (pmsg->rt.rtm_family < RTNL_FAMILY_MAX) {
+            if (def_priorities[pmsg->rt.rtm_family] == -1)
+              def_priorities[pmsg->rt.rtm_family] = priority;
+            else {
+              if (priority == -1
+                  || priority > def_priorities[pmsg->rt.rtm_family])
+                isdefault = Py_False;
+            }
+          }
+
           pyifname = PyString_FromString (ifname);
           pyaddr = PyString_FromString (buffer);
 
