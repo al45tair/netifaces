@@ -45,6 +45,14 @@
 #    include <arpa/inet.h>
 #  endif
 
+#  if HAVE_GETIFADDRS
+#    if HAVE_IPV6_SOCKET_IOCTLS
+#      include <sys/ioctl.h>
+#      include <netinet/in.h>
+#      include <netinet/in_var.h>
+#    endif
+#  endif
+
 #  if HAVE_SOCKET_IOCTLS
 #    include <sys/ioctl.h>
 #    include <netinet/in.h>
@@ -813,7 +821,7 @@ ifaddrs (PyObject *self, PyObject *args)
 
   for (addr = addrs; addr; addr = addr->ifa_next) {
     char buffer[256];
-    PyObject *pyaddr = NULL, *netmask = NULL, *braddr = NULL;
+    PyObject *pyaddr = NULL, *netmask = NULL, *braddr = NULL, *flags = NULL;
 
     if (strcmp (addr->ifa_name, ifname) != 0)
       continue;
@@ -827,7 +835,30 @@ ifaddrs (PyObject *self, PyObject *args)
        record with no actual address).  We skip these as they aren't useful.
        Thanks to Christian Kauhaus for reporting this issue. */
     if (!addr->ifa_addr)
-      continue;  
+      continue;
+      
+    /* For IPv6 addresses we try to get the flags. */
+    if (addr->ifa_addr->sa_family == AF_INET6) {
+      struct sockaddr_in6 *sin;
+      struct in6_ifreq ifr6;
+      
+      int sock6 = socket (AF_INET6, SOCK_DGRAM, 0);
+
+      if (sock6 < 0) {
+        Py_DECREF (result);
+        PyErr_SetFromErrno (PyExc_OSError);
+        freeifaddrs (addrs);
+        return NULL;
+      }
+      
+      sin = (struct sockaddr_in6 *)addr->ifa_addr;
+      strncpy (ifr6.ifr_name, addr->ifa_name, IFNAMSIZ);
+      ifr6.ifr_addr = *sin;
+      
+      if (ioctl (sock6, SIOCGIFAFLAG_IN6, &ifr6) >= 0) {
+        flags = PyLong_FromUnsignedLong (ifr6.ifr_ifru.ifru_flags6);
+      }
+    }
 
     if (string_from_sockaddr (addr->ifa_addr, buffer, sizeof (buffer)) == 0)
       pyaddr = PyString_FromString (buffer);
@@ -845,6 +876,7 @@ ifaddrs (PyObject *self, PyObject *args)
         Py_XDECREF (pyaddr);
         Py_XDECREF (netmask);
         Py_XDECREF (braddr);
+        Py_XDECREF (flags);
         Py_DECREF (result);
         freeifaddrs (addrs);
         return NULL;
@@ -861,10 +893,14 @@ ifaddrs (PyObject *self, PyObject *args)
         else
           PyDict_SetItemString (dict, "broadcast", braddr);
       }
+      
+      if (flags)
+        PyDict_SetItemString (dict, "flags", flags);
 
       Py_XDECREF (pyaddr);
       Py_XDECREF (netmask);
       Py_XDECREF (braddr);
+      Py_XDECREF (flags);
 
       if (!add_to_family (result, addr->ifa_addr->sa_family, dict)) {
         Py_DECREF (result);
@@ -2605,6 +2641,21 @@ MODULE_INIT(netifaces)
   PyModule_AddIntConstant (m, "AF_BLUETOOTH", AF_BLUETOOTH);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_BLUETOOTH),
           PyString_FromString("AF_BLUETOOTH"));
+#endif
+#ifdef IN6_IFF_AUTOCONF
+  PyModule_AddIntConstant (m, "IN6_IFF_AUTOCONF", IN6_IFF_AUTOCONF);
+#endif
+#ifdef IN6_IFF_TEMPORARY
+  PyModule_AddIntConstant (m, "IN6_IFF_TEMPORARY", IN6_IFF_TEMPORARY);
+#endif
+#ifdef IN6_IFF_DYNAMIC
+  PyModule_AddIntConstant (m, "IN6_IFF_DYNAMIC", IN6_IFF_DYNAMIC);
+#endif
+#ifdef IN6_IFF_OPTIMISTIC
+  PyModule_AddIntConstant (m, "IN6_IFF_OPTIMISTIC", IN6_IFF_OPTIMISTIC);
+#endif
+#ifdef IN6_IFF_SECURED
+  PyModule_AddIntConstant (m, "IN6_IFF_SECURED", IN6_IFF_SECURED);
 #endif
   PyModule_AddObject(m, "address_families", address_family_dict);
 
