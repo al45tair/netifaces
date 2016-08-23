@@ -1,4 +1,4 @@
-netifaces 0.10.4
+netifaces 0.10.5
 ================
 
 .. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png
@@ -24,8 +24,8 @@ This package attempts to solve that problem.
 
 First you need to install it, which you can do by typing::
 
-  tar xvzf netifaces-0.10.4.tar.gz
-  cd netifaces-0.10.4
+  tar xvzf netifaces-0.10.5.tar.gz
+  cd netifaces-0.10.5
   python setup.py install
 
 Once that's done, you'll need to start Python and do something like the
@@ -164,7 +164,7 @@ wish to contribute a patch, please use BitBucket to send a pull request.
 
 It's an MIT-style license.  Here goes:
 
-Copyright (c) 2007-2014 Alastair Houghton
+Copyright (c) 2007-2016 Alastair Houghton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
