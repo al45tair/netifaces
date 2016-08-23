@@ -1,3 +1,19 @@
+2016-08-23	Version 0.10.5
+
+	* Fixed setup.py in case there's no print (thanks Stavros).
+	* Fixed a potential one-byte stack overwrite (thanks Doug Horn).
+	* Fixed possible null pointer deference (thanks bastiak).
+	* Added support for IPv6 address flags on BSD/Mac OS X (thanks
+	stefann).
+	* Respect interface priorities when determining default gateway
+	(on Windows and Linux).
+	* Use CIDR notation for IPv6 netmasks.
+	* Ignore broadcast addresses in the 169.254.0.0/16 range (it
+	appears Cygwin's getaddrinfo() may erroneously generate these).
+	* Stop using deprecated WSAAddressToStringA() API on Windows
+	in favour of using WSAAddressToStringW() where available.  Falls
+	back to the older API if required.
+
 2014-05-19	Version 0.10.4
 
 	* Fixed a problem with multi-part Netlink messages on Linux.
