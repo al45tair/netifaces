@@ -414,6 +414,94 @@ string_from_sockaddr (struct sockaddr *addr,
 
   return 0;
 }
+
+/* Tries to format in CIDR form where possible; falls back to using
+   string_from_sockaddr(). */
+static int
+string_from_netmask (struct sockaddr *addr,
+                     char *buffer,
+                     int buflen)
+{
+#ifdef AF_INET6
+  if (addr && addr->sa_family == AF_INET6) {
+    struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+    unsigned n = 16;
+    unsigned zeroes = 0;
+    unsigned prefix;
+    unsigned bytes;
+    char *bufptr = buffer;
+    char *bufend = buffer + buflen;
+    char pfxbuf[16];
+
+    while (n--) {
+      unsigned char byte = sin6->sin6_addr.s6_addr[n];
+
+      /* We need to count the rightmost zeroes */
+      unsigned char x = byte;
+      unsigned zx = 8;
+
+      x &= -x;
+      if (x)
+        --zx;
+      if (x & 0x0f)
+        zx -= 4;
+      if (x & 0x03)
+        zx -= 2;
+      if (x & 0x05)
+        zx -= 1;
+
+      zeroes += zx;
+
+      if (byte)
+        break;
+    }
+
+    prefix = 128 - zeroes;
+    bytes = 2 * ((prefix + 15) / 16);
+
+    for (n = 0; n < bytes; ++n) {
+      unsigned char byte = sin6->sin6_addr.s6_addr[n];
+      char ch1, ch2;
+
+      if (n && !(n & 1)) {
+        if (bufptr < bufend)
+          *bufptr++ = ':';
+      }
+
+      ch1 = '0' + (byte >> 4);
+      if (ch1 > '9')
+        ch1 += 'a' - '0' - 10;
+      ch2 = '0' + (byte & 0xf);
+      if (ch2 > '9')
+        ch2 += 'a' - '0' - 10;
+
+      if (bufptr < bufend)
+        *bufptr++ = ch1;
+      if (bufptr < bufend)
+        *bufptr++ = ch2;
+    }
+
+    if (bytes < 16) {
+      if (bufend - bufptr > 2) {
+        *bufptr++ = ':';
+        *bufptr++ = ':';
+      }
+    }
+
+    sprintf (pfxbuf, "/%u", prefix);
+
+    if (bufend - bufptr > strlen(pfxbuf))
+      strcpy (bufptr, pfxbuf);
+
+    if (buflen)
+      buffer[buflen - 1] = '\0';
+
+    return 0;
+  }
+#endif
+
+  return string_from_sockaddr(addr, buffer, buflen);
+}
 #endif /* !defined(WIN32) */
 
 #if defined(WIN32)
@@ -446,6 +534,69 @@ compare_bits (const void *pva,
     else if (a > b)
       return +1;
   }
+
+  return 0;
+}
+
+static int
+netmask_from_prefix (unsigned prefix,
+                     char *buffer,
+                     size_t buflen)
+{
+  char *bufptr = buffer;
+  char *bufend = buffer + buflen;
+  unsigned bytes = 2 * ((prefix + 15) / 16);
+  static const unsigned char masks[] = {
+    0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
+  };
+  unsigned n;
+  unsigned left = prefix;
+  char pfxbuf[16];
+
+  for (n = 0; n < bytes; ++n) {
+    unsigned char byte;
+    char ch1, ch2;
+
+    if (left >= 8) {
+      byte = 0xff;
+      left -= 8;
+    } else {
+      byte = masks[left];
+      left = 0;
+    }
+
+    if (n && !(n & 1)) {
+      if (bufptr < bufend)
+        *bufptr++ = ':';
+    }
+
+    ch1 = '0' + (byte >> 4);
+    if (ch1 > '9')
+      ch1 += 'a' - '0' - 10;
+    ch2 = '0' + (byte & 0xf);
+    if (ch2 > '9')
+      ch2 += 'a' - '0' - 10;
+
+    if (bufptr < bufend)
+      *bufptr++ = ch1;
+    if (bufptr < bufend)
+      *bufptr++ = ch2;
+  }
+
+  if (bytes < 16) {
+    if (bufend - bufptr > 2) {
+      *bufptr++ = ':';
+      *bufptr++ = ':';
+    }
+  }
+
+  sprintf (pfxbuf, "/%u", prefix);
+
+  if (bufend - bufptr > strlen(pfxbuf))
+    strcpy (bufptr, pfxbuf);
+
+  if (buflen)
+    buffer[buflen - 1] = '\0';
 
   return 0;
 }
@@ -700,37 +851,28 @@ ifaddrs (PyObject *self, PyObject *args)
              pPrefix = pPrefix->Next) {
           struct sockaddr_in6 *pPrefixAddr
             = (struct sockaddr_in6 *)pPrefix->Address.lpSockaddr;
-          struct sockaddr_in6 maskAddr, bcastAddr;
+          struct sockaddr_in6 bcastAddr;
           unsigned toDo;
           unsigned wholeBytes, remainingBits;
-          unsigned char *pMaskBits, *pBcastBits;
+          unsigned char *pBcastBits;
 
           if (pPrefixAddr->sin6_family != AF_INET6)
             continue;
-          
+
           if (compare_bits (&pPrefixAddr->sin6_addr,
                             &pAddr->sin6_addr,
                             pPrefix->PrefixLength) != 0)
             continue;
 
-          memcpy (&maskAddr,
-                  pPrefix->Address.lpSockaddr,
-                  sizeof (maskAddr));
           memcpy (&bcastAddr,
                   pPrefix->Address.lpSockaddr,
                   sizeof (bcastAddr));
-                  
+
           wholeBytes = pPrefix->PrefixLength >> 3;
           remainingBits = pPrefix->PrefixLength & 7;
 
           if (wholeBytes >= 8)
             continue;
-
-          toDo = wholeBytes;
-          pMaskBits = (unsigned char *)&maskAddr.sin6_addr;
-
-          while (toDo--)
-            *pMaskBits++ = 0xff;
 
           toDo = 8 - wholeBytes;
 
@@ -740,27 +882,21 @@ ifaddrs (PyObject *self, PyObject *args)
             static const unsigned char masks[] = {
               0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
             };
-            *pMaskBits++ = masks[remainingBits];
             *pBcastBits &= masks[remainingBits];
             *pBcastBits++ |= ~masks[remainingBits];
             --toDo;
           }
 
-          while (toDo--) {
-            *pMaskBits++ = 0;
+          while (toDo--)
             *pBcastBits++ = 0xff;
-          }
 
-          dwLen = sizeof (buffer);
-          iRet = WSAAddressToStringA ((SOCKADDR *)&maskAddr,
-				      sizeof (maskAddr),
-				      NULL,
-				      buffer,
-				      &dwLen);
+          iRet = netmask_from_prefix (pPrefix->PrefixLength,
+                                      buffer,
+                                      sizeof (buffer));
 
           if (iRet == 0)
             mask = PyString_FromString (buffer);
-          
+
           dwLen = sizeof (buffer);
           iRet = WSAAddressToStringA ((SOCKADDR *)&bcastAddr,
 				      sizeof (bcastAddr),
@@ -867,11 +1003,22 @@ ifaddrs (PyObject *self, PyObject *args)
     if (string_from_sockaddr (addr->ifa_addr, buffer, sizeof (buffer)) == 0)
       pyaddr = PyString_FromString (buffer);
 
-    if (string_from_sockaddr (addr->ifa_netmask, buffer, sizeof (buffer)) == 0)
+    if (string_from_netmask (addr->ifa_netmask, buffer, sizeof (buffer)) == 0)
       netmask = PyString_FromString (buffer);
 
     if (string_from_sockaddr (addr->ifa_broadaddr, buffer, sizeof (buffer)) == 0)
       braddr = PyString_FromString (buffer);
+
+    /* Cygwin's implementation of getaddrinfo() is buggy and returns broadcast
+       addresses for 169.254.0.0/16.  Nix them here. */
+    if (addr->ifa_addr->sa_family == AF_INET) {
+      struct sockaddr_in *sin = (struct sockaddr_in *)addr->ifa_addr;
+
+      if ((ntohl(sin->sin_addr.s_addr) & 0xffff0000) == 0xa9fe0000) {
+        Py_XDECREF (braddr);
+        braddr = NULL;
+      }
+    }
 
     {
       PyObject *dict = PyDict_New();
