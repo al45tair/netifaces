@@ -38,10 +38,15 @@
 #    include <net/route.h>
 #  endif
 
+/* RTNL_FAMILY_MAX not there yet in old kernels, see linux commit 25239ce */
 #  if HAVE_PF_NETLINK
 #    include <asm/types.h>
 #    include <linux/netlink.h>
 #    include <linux/rtnetlink.h>
+#    if !defined(RTNL_FAMILY_MAX)
+#      include <linux/net.h>
+#      define RTNL_FAMILY_MAX NPROTO
+#    endif
 #    include <arpa/inet.h>
 #  endif
 
