@@ -1,3 +1,9 @@
+2017-06-01	Version 0.10.6
+
+	* Fixed netmask determination on Windows.
+	* All addresses are now unicode strings on all platforms,
+	regardless of Python version.
+
 2016-08-23	Version 0.10.5
 
 	* Fixed setup.py in case there's no print (thanks Stavros).
