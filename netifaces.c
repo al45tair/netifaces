@@ -1,9 +1,21 @@
 #include <Python.h>
 
+/* Before Python 2.6, PyUnicode_FromString doesn't exist */
+#if PY_MAJOR_VERSION < 2 || (PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION < 6)
+PyObject *PyUnicode_FromString(const char *s)
+{
+  Py_ssize_t len = strlen(s);
+  if (!len) {
+    Py_UNICODE uc = 0;
+    return PyUnicode_FromUnicode(&uc, 0);
+  }
+  return PyUnicode_DecodeUTF8(s, len, NULL);
+}
+#endif
+
 /* Python 3 compatibility */
 #if PY_MAJOR_VERSION >= 3
 #define PyInt_FromLong PyLong_FromLong
-#define PyString_FromString PyUnicode_FromString
 
 #define MODULE_ERROR            NULL
 #define MODULE_RETURN(v)       return (v)
@@ -601,7 +613,7 @@ netmask_from_prefix (unsigned prefix)
 
   buffer[sizeof(buffer) - 1] = '\0';
 
-  return PyString_FromString(buffer);
+  return PyUnicode_FromString(buffer);
 }
 
 /* We dynamically bind to WSAAddressToStringW or WSAAddressToStringA
@@ -666,7 +678,7 @@ string_from_address(SOCKADDR *addr, DWORD addrlen)
     iRet = AddressToStringA (addr, addrlen, NULL, buffer, &dwLen);
 
     if (iRet == 0)
-      return PyString_FromString (buffer);
+      return PyUnicode_FromString (buffer);
   }
 
   return NULL;
@@ -790,7 +802,7 @@ ifaddrs (PyObject *self, PyObject *args)
       }
       *--ptr = '\0';
 
-      hwaddr = PyString_FromString (buffer);
+      hwaddr = PyUnicode_FromString (buffer);
       dict = PyDict_New ();
 
       if (!dict) {
@@ -1050,13 +1062,13 @@ ifaddrs (PyObject *self, PyObject *args)
 #endif /* HAVE_IPV6_SOCKET_IOCTLS */
 
     if (string_from_sockaddr (addr->ifa_addr, buffer, sizeof (buffer)) == 0)
-      pyaddr = PyString_FromString (buffer);
+      pyaddr = PyUnicode_FromString (buffer);
 
     if (string_from_netmask (addr->ifa_netmask, buffer, sizeof (buffer)) == 0)
-      netmask = PyString_FromString (buffer);
+      netmask = PyUnicode_FromString (buffer);
 
     if (string_from_sockaddr (addr->ifa_broadaddr, buffer, sizeof (buffer)) == 0)
-      braddr = PyString_FromString (buffer);
+      braddr = PyUnicode_FromString (buffer);
 
     /* Cygwin's implementation of getaddrinfo() is buggy and returns broadcast
        addresses for 169.254.0.0/16.  Nix them here. */
@@ -1134,7 +1146,7 @@ ifaddrs (PyObject *self, PyObject *args)
     found = TRUE;
 
     if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0) {
-      PyObject *hwaddr = PyString_FromString (buffer);
+      PyObject *hwaddr = PyUnicode_FromString (buffer);
       PyObject *dict = PyDict_New ();
 
       if (!hwaddr || !dict) {
@@ -1166,7 +1178,7 @@ ifaddrs (PyObject *self, PyObject *args)
     found = TRUE;
 
     if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0)
-      addr = PyString_FromString (buffer);
+      addr = PyUnicode_FromString (buffer);
   }
 #endif
 
@@ -1179,7 +1191,7 @@ ifaddrs (PyObject *self, PyObject *args)
     found = TRUE;
 
     if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0)
-      netmask = PyString_FromString (buffer);
+      netmask = PyUnicode_FromString (buffer);
   }
 #endif
 
@@ -1205,7 +1217,7 @@ ifaddrs (PyObject *self, PyObject *args)
     found = TRUE;
 
     if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0)
-      braddr = PyString_FromString (buffer);
+      braddr = PyUnicode_FromString (buffer);
   }
 #endif
 
@@ -1218,7 +1230,7 @@ ifaddrs (PyObject *self, PyObject *args)
     found = TRUE;
 
     if (string_from_sockaddr ((struct sockaddr *)&ifr.CNAME(ifr_addr), buffer, sizeof (buffer)) == 0)
-      dstaddr = PyString_FromString (buffer);
+      dstaddr = PyUnicode_FromString (buffer);
   }
 #endif
 
@@ -1318,7 +1330,7 @@ interfaces (PyObject *self)
   }
 
   for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
-    PyObject *ifname = (PyObject *)PyString_FromString (pInfo->AdapterName);
+    PyObject *ifname = (PyObject *)PyUnicode_FromString (pInfo->AdapterName);
 
     PyList_Append (result, ifname);
     Py_DECREF (ifname);
@@ -1342,7 +1354,7 @@ interfaces (PyObject *self)
 
   for (addr = addrs; addr; addr = addr->ifa_next) {
     if (!prev_name || strncmp (addr->ifa_name, prev_name, IFNAMSIZ) != 0) {
-      PyObject *ifname = PyString_FromString (addr->ifa_name);
+      PyObject *ifname = PyUnicode_FromString (addr->ifa_name);
     
       if (!PySequence_Contains (result, ifname))
         PyList_Append (result, ifname);
@@ -1412,7 +1424,7 @@ interfaces (PyObject *self)
                                                           + ifc.CNAME(ifc_len));
   while (pfreq < pfreqend) {
     if (!prev_name || strncmp (prev_name, pfreq->CNAME(ifr_name), IFNAMSIZ) != 0) {
-      PyObject *name = PyString_FromString (pfreq->CNAME(ifr_name));
+      PyObject *name = PyUnicode_FromString (pfreq->CNAME(ifr_name));
 
       if (!PySequence_Contains (result, name))
         PyList_Append (result, name);
@@ -1656,7 +1668,7 @@ gateways (PyObject *self)
         dwBestMetric = table->table[n].dwForwardMetric1;
 
       ifname = PyUnicode_FromUnicode (pwcsName, wcslen (pwcsName));
-      gateway = PyString_FromString (gwbuf);
+      gateway = PyUnicode_FromString (gwbuf);
       isdefault = bBest ? Py_True : Py_False;
 
       tuple = PyTuple_Pack (3, gateway, ifname, isdefault);
@@ -1914,8 +1926,8 @@ gateways (PyObject *self)
             }
           }
 
-          pyifname = PyString_FromString (ifname);
-          pyaddr = PyString_FromString (buffer);
+          pyifname = PyUnicode_FromString (ifname);
+          pyaddr = PyUnicode_FromString (buffer);
 
           tuple = PyTuple_Pack (3, pyaddr, pyifname, isdefault);
 
@@ -2020,7 +2032,7 @@ gateways (PyObject *self)
       continue;
     }
 
-    pyifname = PyString_FromString (ifname);
+    pyifname = PyUnicode_FromString (ifname);
 
     ptr = (char *)(msg + 1);
     while (ptr + sizeof (struct sockaddr) <= msgend && addrs) {
@@ -2062,7 +2074,7 @@ gateways (PyObject *self)
         PyObject *deftuple = NULL;
 
         if (string_from_sockaddr (sa, buffer, sizeof(buffer)) == 0) {
-          PyObject *pyaddr = PyString_FromString (buffer);
+          PyObject *pyaddr = PyUnicode_FromString (buffer);
 #ifdef RTF_IFSCOPE
           PyObject *isdefault = PyBool_FromLong (!(msg->rtm_flags & RTF_IFSCOPE));
 #else
@@ -2288,8 +2300,8 @@ gateways (PyObject *self)
 
       if (string_from_sockaddr ((struct sockaddr *)gw,
                                 buffer, sizeof(buffer)) == 0) {
-        PyObject *pyifname = PyString_FromString (ifname);
-        PyObject *pyaddr = PyString_FromString (buffer);
+        PyObject *pyifname = PyUnicode_FromString (ifname);
+        PyObject *pyaddr = PyUnicode_FromString (buffer);
 #ifdef RTF_IFSCOPE
         PyObject *isdefault = PyBool_FromLong (!(pmsg->rtm_flags & RTF_IFSCOPE));
 #else
@@ -2467,8 +2479,8 @@ gateways (PyObject *self)
 
       if (string_from_sockaddr ((struct sockaddr *)gw,
                                 buffer, sizeof(buffer)) == 0) {
-        PyObject *pyifname = PyString_FromString (ifname);
-        PyObject *pyaddr = PyString_FromString (buffer);
+        PyObject *pyifname = PyUnicode_FromString (ifname);
+        PyObject *pyaddr = PyUnicode_FromString (buffer);
 #ifdef RTF_IFSCOPE
         PyObject *isdefault = PyBool_FromLong (!(pmsg->rtm_flags & RTF_IFSCOPE));
 #else
@@ -2566,297 +2578,297 @@ MODULE_INIT(netifaces)
 #ifdef AF_UNSPEC  
   PyModule_AddIntConstant (m, "AF_UNSPEC", AF_UNSPEC);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_UNSPEC),
-          PyString_FromString("AF_UNSPEC"));
+          PyUnicode_FromString("AF_UNSPEC"));
 #endif
 #ifdef AF_UNIX
   PyModule_AddIntConstant (m, "AF_UNIX", AF_UNIX);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_UNIX),
-          PyString_FromString("AF_UNIX"));
+          PyUnicode_FromString("AF_UNIX"));
 #endif
 #ifdef AF_FILE
   PyModule_AddIntConstant (m, "AF_FILE", AF_FILE);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_FILE),
-          PyString_FromString("AF_FILE"));
+          PyUnicode_FromString("AF_FILE"));
 #endif
 #ifdef AF_INET
   PyModule_AddIntConstant (m, "AF_INET", AF_INET);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_INET),
-          PyString_FromString("AF_INET"));
+          PyUnicode_FromString("AF_INET"));
 #endif
 #ifdef AF_AX25
   PyModule_AddIntConstant (m, "AF_AX25", AF_AX25);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_AX25),
-          PyString_FromString("AF_AX25"));
+          PyUnicode_FromString("AF_AX25"));
 #endif
 #ifdef AF_IMPLINK  
   PyModule_AddIntConstant (m, "AF_IMPLINK", AF_IMPLINK);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_IMPLINK),
-          PyString_FromString("AF_IMPLINK"));
+          PyUnicode_FromString("AF_IMPLINK"));
 #endif
 #ifdef AF_PUP  
   PyModule_AddIntConstant (m, "AF_PUP", AF_PUP);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_PUP),
-          PyString_FromString("AF_PUP"));
+          PyUnicode_FromString("AF_PUP"));
 #endif
 #ifdef AF_CHAOS
   PyModule_AddIntConstant (m, "AF_CHAOS", AF_CHAOS);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_CHAOS),
-          PyString_FromString("AF_CHAOS"));
+          PyUnicode_FromString("AF_CHAOS"));
 #endif
 #ifdef AF_NS
   PyModule_AddIntConstant (m, "AF_NS", AF_NS);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NS),
-          PyString_FromString("AF_NS"));
+          PyUnicode_FromString("AF_NS"));
 #endif
 #ifdef AF_ISO
   PyModule_AddIntConstant (m, "AF_ISO", AF_ISO);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ISO),
-          PyString_FromString("AF_ISO"));
+          PyUnicode_FromString("AF_ISO"));
 #endif
 #ifdef AF_ECMA
   PyModule_AddIntConstant (m, "AF_ECMA", AF_ECMA);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ECMA),
-          PyString_FromString("AF_ECMA"));
+          PyUnicode_FromString("AF_ECMA"));
 #endif
 #ifdef AF_DATAKIT
   PyModule_AddIntConstant (m, "AF_DATAKIT", AF_DATAKIT);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_DATAKIT),
-          PyString_FromString("AF_DATAKIT"));
+          PyUnicode_FromString("AF_DATAKIT"));
 #endif
 #ifdef AF_CCITT
   PyModule_AddIntConstant (m, "AF_CCITT", AF_CCITT);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_CCITT),
-          PyString_FromString("AF_CCITT"));
+          PyUnicode_FromString("AF_CCITT"));
 #endif
 #ifdef AF_SNA
   PyModule_AddIntConstant (m, "AF_SNA", AF_SNA);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_SNA),
-          PyString_FromString("AF_SNA"));
+          PyUnicode_FromString("AF_SNA"));
 #endif
 #ifdef AF_DECnet
   PyModule_AddIntConstant (m, "AF_DECnet", AF_DECnet);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_DECnet),
-          PyString_FromString("AF_DECnet"));
+          PyUnicode_FromString("AF_DECnet"));
 #endif
 #ifdef AF_DLI
   PyModule_AddIntConstant (m, "AF_DLI", AF_DLI);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_DLI),
-          PyString_FromString("AF_DLI"));
+          PyUnicode_FromString("AF_DLI"));
 #endif
 #ifdef AF_LAT
   PyModule_AddIntConstant (m, "AF_LAT", AF_LAT);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_LAT),
-          PyString_FromString("AF_LAT"));
+          PyUnicode_FromString("AF_LAT"));
 #endif
 #ifdef AF_HYLINK
   PyModule_AddIntConstant (m, "AF_HYLINK", AF_HYLINK);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_HYLINK),
-          PyString_FromString("AF_HYLINK"));
+          PyUnicode_FromString("AF_HYLINK"));
 #endif
 #ifdef AF_APPLETALK
   PyModule_AddIntConstant (m, "AF_APPLETALK", AF_APPLETALK);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_APPLETALK),
-          PyString_FromString("AF_APPLETALK"));
+          PyUnicode_FromString("AF_APPLETALK"));
 #endif
 #ifdef AF_ROUTE
   PyModule_AddIntConstant (m, "AF_ROUTE", AF_ROUTE);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ROUTE),
-          PyString_FromString("AF_ROUTE"));
+          PyUnicode_FromString("AF_ROUTE"));
 #endif
 #ifdef AF_LINK
   PyModule_AddIntConstant (m, "AF_LINK", AF_LINK);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_LINK),
-          PyString_FromString("AF_LINK"));
+          PyUnicode_FromString("AF_LINK"));
 #endif
 #ifdef AF_PACKET
   PyModule_AddIntConstant (m, "AF_PACKET", AF_PACKET);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_PACKET),
-          PyString_FromString("AF_PACKET"));
+          PyUnicode_FromString("AF_PACKET"));
 #endif
 #ifdef AF_COIP
   PyModule_AddIntConstant (m, "AF_COIP", AF_COIP);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_COIP),
-          PyString_FromString("AF_COIP"));
+          PyUnicode_FromString("AF_COIP"));
 #endif
 #ifdef AF_CNT
   PyModule_AddIntConstant (m, "AF_CNT", AF_CNT);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_CNT),
-          PyString_FromString("AF_CNT"));
+          PyUnicode_FromString("AF_CNT"));
 #endif
 #ifdef AF_IPX
   PyModule_AddIntConstant (m, "AF_IPX", AF_IPX);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_IPX),
-          PyString_FromString("AF_IPX"));
+          PyUnicode_FromString("AF_IPX"));
 #endif
 #ifdef AF_SIP
   PyModule_AddIntConstant (m, "AF_SIP", AF_SIP);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_SIP),
-          PyString_FromString("AF_SIP"));
+          PyUnicode_FromString("AF_SIP"));
 #endif
 #ifdef AF_NDRV
   PyModule_AddIntConstant (m, "AF_NDRV", AF_NDRV);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NDRV),
-          PyString_FromString("AF_NDRV"));
+          PyUnicode_FromString("AF_NDRV"));
 #endif
 #ifdef AF_ISDN
   PyModule_AddIntConstant (m, "AF_ISDN", AF_ISDN);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ISDN),
-          PyString_FromString("AF_ISDN"));
+          PyUnicode_FromString("AF_ISDN"));
 #endif
 #ifdef AF_INET6
   PyModule_AddIntConstant (m, "AF_INET6", AF_INET6);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_INET6),
-          PyString_FromString("AF_INET6"));
+          PyUnicode_FromString("AF_INET6"));
 #endif
 #ifdef AF_NATM
   PyModule_AddIntConstant (m, "AF_NATM", AF_NATM);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NATM),
-          PyString_FromString("AF_NATM"));
+          PyUnicode_FromString("AF_NATM"));
 #endif
 #ifdef AF_SYSTEM
   PyModule_AddIntConstant (m, "AF_SYSTEM", AF_SYSTEM);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_SYSTEM),
-          PyString_FromString("AF_SYSTEM"));
+          PyUnicode_FromString("AF_SYSTEM"));
 #endif
 #ifdef AF_NETBIOS
   PyModule_AddIntConstant (m, "AF_NETBIOS", AF_NETBIOS);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NETBIOS),
-          PyString_FromString("AF_NETBIOS"));
+          PyUnicode_FromString("AF_NETBIOS"));
 #endif
 #ifdef AF_NETBEUI
   PyModule_AddIntConstant (m, "AF_NETBEUI", AF_NETBEUI);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NETBEUI),
-          PyString_FromString("AF_NETBEUI"));
+          PyUnicode_FromString("AF_NETBEUI"));
 #endif
 #ifdef AF_PPP
   PyModule_AddIntConstant (m, "AF_PPP", AF_PPP);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_PPP),
-          PyString_FromString("AF_PPP"));
+          PyUnicode_FromString("AF_PPP"));
 #endif
 #ifdef AF_ATM
   PyModule_AddIntConstant (m, "AF_ATM", AF_ATM);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ATM),
-          PyString_FromString("AF_ATM"));
+          PyUnicode_FromString("AF_ATM"));
 #endif
 #ifdef AF_ATMPVC
   PyModule_AddIntConstant (m, "AF_ATMPVC", AF_ATMPVC);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ATMPVC),
-          PyString_FromString("AF_ATMPVC"));
+          PyUnicode_FromString("AF_ATMPVC"));
 #endif
 #ifdef AF_ATMSVC
   PyModule_AddIntConstant (m, "AF_ATMSVC", AF_ATMSVC);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ATMSVC),
-          PyString_FromString("AF_ATMSVC"));
+          PyUnicode_FromString("AF_ATMSVC"));
 #endif
 #ifdef AF_NETGRAPH
   PyModule_AddIntConstant (m, "AF_NETGRAPH", AF_NETGRAPH);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NETGRAPH),
-          PyString_FromString("AF_NETGRAPH"));
+          PyUnicode_FromString("AF_NETGRAPH"));
 #endif
 #ifdef AF_VOICEVIEW
   PyModule_AddIntConstant (m, "AF_VOICEVIEW", AF_VOICEVIEW);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_VOICEVIEW),
-          PyString_FromString("AF_VOICEVIEW"));
+          PyUnicode_FromString("AF_VOICEVIEW"));
 #endif
 #ifdef AF_FIREFOX
   PyModule_AddIntConstant (m, "AF_FIREFOX", AF_FIREFOX);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_FIREFOX),
-          PyString_FromString("AF_FIREFOX"));
+          PyUnicode_FromString("AF_FIREFOX"));
 #endif
 #ifdef AF_UNKNOWN1
   PyModule_AddIntConstant (m, "AF_UNKNOWN1", AF_UNKNOWN1);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_UNKNOWN1),
-          PyString_FromString("AF_UNKNOWN1"));
+          PyUnicode_FromString("AF_UNKNOWN1"));
 #endif
 #ifdef AF_BAN
   PyModule_AddIntConstant (m, "AF_BAN", AF_BAN);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_BAN),
-          PyString_FromString("AF_BAN"));
+          PyUnicode_FromString("AF_BAN"));
 #endif
 #ifdef AF_CLUSTER
   PyModule_AddIntConstant (m, "AF_CLUSTER", AF_CLUSTER);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_CLUSTER),
-          PyString_FromString("AF_CLUSTER"));
+          PyUnicode_FromString("AF_CLUSTER"));
 #endif
 #ifdef AF_12844
   PyModule_AddIntConstant (m, "AF_12844", AF_12844);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_12844),
-          PyString_FromString("AF_12844"));
+          PyUnicode_FromString("AF_12844"));
 #endif
 #ifdef AF_IRDA
   PyModule_AddIntConstant (m, "AF_IRDA", AF_IRDA);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_IRDA),
-          PyString_FromString("AF_IRDA"));
+          PyUnicode_FromString("AF_IRDA"));
 #endif
 #ifdef AF_NETDES
   PyModule_AddIntConstant (m, "AF_NETDES", AF_NETDES);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NETDES),
-          PyString_FromString("AF_NETDES"));
+          PyUnicode_FromString("AF_NETDES"));
 #endif
 #ifdef AF_NETROM
   PyModule_AddIntConstant (m, "AF_NETROM", AF_NETROM);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NETROM),
-          PyString_FromString("AF_NETROM"));
+          PyUnicode_FromString("AF_NETROM"));
 #endif
 #ifdef AF_BRIDGE
   PyModule_AddIntConstant (m, "AF_BRIDGE", AF_BRIDGE);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_BRIDGE),
-          PyString_FromString("AF_BRIDGE"));
+          PyUnicode_FromString("AF_BRIDGE"));
 #endif
 #ifdef AF_X25
   PyModule_AddIntConstant (m, "AF_X25", AF_X25);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_X25),
-          PyString_FromString("AF_X25"));
+          PyUnicode_FromString("AF_X25"));
 #endif
 #ifdef AF_ROSE
   PyModule_AddIntConstant (m, "AF_ROSE", AF_ROSE);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ROSE),
-          PyString_FromString("AF_ROSE"));
+          PyUnicode_FromString("AF_ROSE"));
 #endif
 #ifdef AF_SECURITY
   PyModule_AddIntConstant (m, "AF_SECURITY", AF_SECURITY);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_SECURITY),
-          PyString_FromString("AF_SECURITY"));
+          PyUnicode_FromString("AF_SECURITY"));
 #endif
 #ifdef AF_KEY
   PyModule_AddIntConstant (m, "AF_KEY", AF_KEY);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_KEY),
-          PyString_FromString("AF_KEY"));
+          PyUnicode_FromString("AF_KEY"));
 #endif
 #ifdef AF_NETLINK
   PyModule_AddIntConstant (m, "AF_NETLINK", AF_NETLINK);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_NETLINK),
-          PyString_FromString("AF_NETLINK"));
+          PyUnicode_FromString("AF_NETLINK"));
 #endif
 #ifdef AF_ASH
   PyModule_AddIntConstant (m, "AF_ASH", AF_ASH);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ASH),
-          PyString_FromString("AF_ASH"));
+          PyUnicode_FromString("AF_ASH"));
 #endif
 #ifdef AF_ECONET
   PyModule_AddIntConstant (m, "AF_ECONET", AF_ECONET);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_ECONET),
-          PyString_FromString("AF_ECONET"));
+          PyUnicode_FromString("AF_ECONET"));
 #endif
 #ifdef AF_SNA
   PyModule_AddIntConstant (m, "AF_SNA", AF_SNA);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_SNA),
-          PyString_FromString("AF_SNA"));
+          PyUnicode_FromString("AF_SNA"));
 #endif
 #ifdef AF_PPPOX
   PyModule_AddIntConstant (m, "AF_PPPOX", AF_PPPOX);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_PPPOX),
-          PyString_FromString("AF_PPPOX"));
+          PyUnicode_FromString("AF_PPPOX"));
 #endif
 #ifdef AF_WANPIPE
   PyModule_AddIntConstant (m, "AF_WANPIPE", AF_WANPIPE);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_WANPIPE),
-          PyString_FromString("AF_WANPIPE"));
+          PyUnicode_FromString("AF_WANPIPE"));
 #endif
 #ifdef AF_BLUETOOTH
   PyModule_AddIntConstant (m, "AF_BLUETOOTH", AF_BLUETOOTH);
   PyDict_SetItem(address_family_dict, PyInt_FromLong(AF_BLUETOOTH),
-          PyString_FromString("AF_BLUETOOTH"));
+          PyUnicode_FromString("AF_BLUETOOTH"));
 #endif
 #ifdef IN6_IFF_AUTOCONF
   PyModule_AddIntConstant (m, "IN6_IFF_AUTOCONF", IN6_IFF_AUTOCONF);
