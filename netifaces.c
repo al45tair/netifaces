@@ -855,7 +855,9 @@ ifaddrs (PyObject *self, PyObject *args)
             = (struct sockaddr_in *)pPrefix->Address.lpSockaddr;
 
           if (pPrefixAddr->sin_family != AF_INET
-              || (prefix_len >= 0 && pPrefix->PrefixLength < prefix_len))
+              || (prefix_len >= 0
+		  && pPrefix->PrefixLength < (unsigned)prefix_len)
+	      || (prefix_len >= 0 && pPrefix->PrefixLength == 32))
             continue;
 
           if (compare_bits (&pPrefixAddr->sin_addr,
@@ -928,7 +930,9 @@ ifaddrs (PyObject *self, PyObject *args)
             = (struct sockaddr_in6 *)pPrefix->Address.lpSockaddr;
 
           if (pPrefixAddr->sin6_family != AF_INET6
-              || (prefix_len >= 0 && pPrefix->PrefixLength < prefix_len))
+              || (prefix_len >= 0
+		  && pPrefix->PrefixLength < (unsigned)prefix_len)
+	      || (prefix_len >= 0 && pPrefix->PrefixLength == 128))
             continue;
 
           if (compare_bits (&pPrefixAddr->sin6_addr,
