@@ -1,9 +1,13 @@
 netifaces 0.10.6
 ================
 
-.. image:: https://drone.io/bitbucket.org/al45tair/netifaces/status.png
-   :target: https://drone.io/bitbucket.org/al45tair/netifaces/latest
-   :alt: Build Status
+.. image:: https://travis-ci.org/al45tair/netifaces.svg?branch=master
+   :target: https://travis-ci.org/al45tair/dmgbuild
+   :alt: Build Status (Linux/Mac)
+
+.. image:: https://ci.appveyor.com/api/projects/status/3ctn1bl0aigpfjoo/branch/master?svg=true
+   :target: https://ci.appveyor.com/project/al45tair/netifaces/branch/master
+   :alt: Build Status (Windows)
 
 1. What is this?
 ----------------
@@ -160,14 +164,14 @@ system out there where this just won't work.
 It gets regular testing on OS X, Linux and Windows.  It has also been used
 successfully on Solaris, and it's expected to work properly on other UNIX-like
 systems as well.  If you are running something that is not supported, and
-wish to contribute a patch, please use BitBucket to send a pull request.
+wish to contribute a patch, please use Github to send a pull request.
 
 4. What license is this under?
 ------------------------------
 
 It's an MIT-style license.  Here goes:
 
-Copyright (c) 2007-2017 Alastair Houghton
+Copyright (c) 2007-2018 Alastair Houghton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -191,7 +195,7 @@ SOFTWARE.
 --------------------------
 
 Because someone released a fork of netifaces with the version 0.9.0.
-Hopefully skipping the version number should remove any confusion.  In 
-addition starting with 0.10.0 Python 3 is now supported and other 
+Hopefully skipping the version number should remove any confusion.  In
+addition starting with 0.10.0 Python 3 is now supported and other
 features/bugfixes have been included as well.  See the CHANGELOG for a
 more complete list of changes.
