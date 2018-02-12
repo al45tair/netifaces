@@ -1,11 +1,17 @@
 netifaces 0.10.6
 ================
 
-.. image:: https://travis-ci.org/al45tair/netifaces.svg?branch=master
++-------------+------------------+
+| Linux/macOS | |BuildStatus|    |
++-------------+------------------+
+| Windows     | |WinBuildStatus| |
++-------------+------------------+
+
+.. |BuildStatus| image:: https://travis-ci.org/al45tair/netifaces.svg?branch=master
    :target: https://travis-ci.org/al45tair/dmgbuild
    :alt: Build Status (Linux/Mac)
 
-.. image:: https://ci.appveyor.com/api/projects/status/3ctn1bl0aigpfjoo/branch/master?svg=true
+.. |WinBuildStatus| image:: https://ci.appveyor.com/api/projects/status/3ctn1bl0aigpfjoo/branch/master?svg=true
    :target: https://ci.appveyor.com/project/al45tair/netifaces/branch/master
    :alt: Build Status (Windows)
 
