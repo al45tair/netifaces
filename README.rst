@@ -1,4 +1,4 @@
-netifaces 0.10.6
+netifaces 0.10.7
 ================
 
 +-------------+------------------+
@@ -34,8 +34,8 @@ This package attempts to solve that problem.
 
 First you need to install it, which you can do by typing::
 
-  tar xvzf netifaces-0.10.6.tar.gz
-  cd netifaces-0.10.6
+  tar xvzf netifaces-0.10.7.tar.gz
+  cd netifaces-0.10.7
   python setup.py install
 
 **Note that you will need the relevant developer tools for your platform**,

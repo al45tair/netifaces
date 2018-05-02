@@ -19,10 +19,10 @@ else:
     except ImportError:
         import __builtin__
         builtins = __builtin__
-        
+
     output = getattr(builtins, 'print', lambda x: True)
-    
-__version__ = "0.10.6"
+
+__version__ = "0.10.7"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
