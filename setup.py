@@ -570,7 +570,8 @@ if not getattr(sys, 'getwindowsversion', None):
 
 readme_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                            'README.rst')
-long_desc = open(readme_path, 'r').read()
+with open(readme_path, 'r') as fp:
+    long_desc = fp.read()
 
 setup (name='netifaces',
        version=__version__,
