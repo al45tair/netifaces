@@ -581,7 +581,7 @@ setup (name='netifaces',
        long_description=long_desc,
        author='Alastair Houghton',
        author_email='alastair@alastairs-place.net',
-       url='https://bitbucket.org/al45tair/netifaces',
+       url='https://github.com/al45tair/netifaces',
        classifiers=[
     'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',
