@@ -1,18 +1,5 @@
 #include <Python.h>
 
-/* Before Python 2.6, PyUnicode_FromString doesn't exist */
-#if PY_MAJOR_VERSION < 2 || (PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION < 6)
-PyObject *PyUnicode_FromString(const char *s)
-{
-  Py_ssize_t len = strlen(s);
-  if (!len) {
-    Py_UNICODE uc = 0;
-    return PyUnicode_FromUnicode(&uc, 0);
-  }
-  return PyUnicode_DecodeUTF8(s, len, NULL);
-}
-#endif
-
 /* Python 3 compatibility */
 #if PY_MAJOR_VERSION >= 3
 #define PyInt_FromLong PyLong_FromLong
