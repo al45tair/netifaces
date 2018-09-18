@@ -15,8 +15,8 @@ fi
 
 niversion=$1
 artifact_url="https://ci.appveyor.com/api/projects/al45tair/netifaces/artifacts"
-win32_versions="27 34 35 36"
-amd64_versions="36"
+win32_versions="27 34 35 36 37"
+amd64_versions="36 37"
 
 for version in $win32_versions; do
     wheel=netifaces-$niversion-cp$version-cp${version}m-win32.whl
