@@ -559,58 +559,11 @@ static PyObject *
 netmask_from_prefix (unsigned prefix)
 {
   char buffer[256];
-  char *bufptr = buffer;
-  char *bufend = buffer + sizeof(buffer);
-  unsigned bytes = 2 * ((prefix + 15) / 16);
-  static const unsigned char masks[] = {
-    0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
-  };
-  unsigned n;
-  unsigned left = prefix;
-  char pfxbuf[16];
+  int div = prefix / 8;
 
-  for (n = 0; n < bytes; ++n) {
-    unsigned char byte;
-    char ch1, ch2;
-
-    if (left >= 8) {
-      byte = 0xff;
-      left -= 8;
-    } else {
-      byte = masks[left];
-      left = 0;
-    }
-
-    if (n && !(n & 1)) {
-      if (bufptr < bufend)
-        *bufptr++ = ':';
-    }
-
-    ch1 = '0' + (byte >> 4);
-    if (ch1 > '9')
-      ch1 += 'a' - '0' - 10;
-    ch2 = '0' + (byte & 0xf);
-    if (ch2 > '9')
-      ch2 += 'a' - '0' - 10;
-
-    if (bufptr < bufend)
-      *bufptr++ = ch1;
-    if (bufptr < bufend)
-      *bufptr++ = ch2;
-  }
-
-  if (bytes < 16) {
-    if (bufend - bufptr > 2) {
-      *bufptr++ = ':';
-      *bufptr++ = ':';
-    }
-  }
-
-  sprintf (pfxbuf, "/%u", prefix);
-
-  if ((size_t)(bufend - bufptr) > strlen(pfxbuf))
-    strcpy (bufptr, pfxbuf);
-
+  memset(buffer, 0, sizeof(buffer));
+  memset(buffer, 0xff, div);
+  buffer[div] = (0xff << (8 - prefix % 8)) & 0xff;
   buffer[sizeof(buffer) - 1] = '\0';
 
   return PyUnicode_FromString(buffer);
