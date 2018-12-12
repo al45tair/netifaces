@@ -340,7 +340,7 @@ getnameinfo (const struct sockaddr *addr, int addr_len,
 static int
 string_from_sockaddr (struct sockaddr *addr,
                       char *buffer,
-                      int buflen)
+                      size_t buflen)
 {
   struct sockaddr* bigaddr = 0;
   int failure;
@@ -437,7 +437,7 @@ string_from_sockaddr (struct sockaddr *addr,
 static int
 string_from_netmask (struct sockaddr *addr,
                      char *buffer,
-                     int buflen)
+                     size_t buflen)
 {
 #ifdef AF_INET6
   if (addr && addr->sa_family == AF_INET6) {
@@ -507,7 +507,7 @@ string_from_netmask (struct sockaddr *addr,
 
     sprintf (pfxbuf, "/%u", prefix);
 
-    if (bufend - bufptr > strlen(pfxbuf))
+    if (bufend - bufptr > (int)strlen(pfxbuf))
       strcpy (bufptr, pfxbuf);
 
     if (buflen)
@@ -2073,12 +2073,12 @@ gateways (PyObject *self)
       }
 
       if (addr == RTA_GATEWAY) {
-        char buffer[256];
+        char strbuf[256];
         PyObject *tuple = NULL;
         PyObject *deftuple = NULL;
 
-        if (string_from_sockaddr (sa, buffer, sizeof(buffer)) == 0) {
-          PyObject *pyaddr = PyUnicode_FromString (buffer);
+        if (string_from_sockaddr (sa, strbuf, sizeof(strbuf)) == 0) {
+          PyObject *pyaddr = PyUnicode_FromString (strbuf);
 #ifdef RTF_IFSCOPE
           PyObject *isdefault = PyBool_FromLong (!(msg->rtm_flags & RTF_IFSCOPE));
 #else
