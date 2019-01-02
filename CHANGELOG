@@ -1,3 +1,14 @@
+2019-01-02	Version 0.10.8
+
+	* Fixed a bug that in certain circumstances could lead to an infinite
+	loop in netifaces.gateways() (thanks asomers).
+	* Fixed a memory management bug in an error path (thanks NicoPy).
+
+2018-05-08	Version 0.10.7
+
+	* Added LICENSE file
+	* Automated Windows builds via AppVeyor.
+
 2017-06-01	Version 0.10.6
 
 	* Fixed netmask determination on Windows.

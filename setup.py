@@ -22,7 +22,7 @@ else:
 
     output = getattr(builtins, 'print', lambda x: True)
 
-__version__ = "0.10.7"
+__version__ = "0.10.8"
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
