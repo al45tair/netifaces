@@ -18,7 +18,8 @@ Finally, when the release is complete, run
 
   ./build-manylinux1
   ./build-osx
-  ./fetch-win32-wheels
+  ./fetch-win32-wheels a.b.c release_a_b_c
+  python setup.py sdist
 
 and then upload using
 
