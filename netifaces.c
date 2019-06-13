@@ -1024,7 +1024,7 @@ ifaddrs (PyObject *self, PyObject *args)
     char buffer[256];
     PyObject *pyaddr = NULL, *netmask = NULL, *braddr = NULL, *flags = NULL;
 
-    if (strcmp (addr->ifa_name, ifname) != 0)
+    if (addr->ifa_name == NULL || strcmp (addr->ifa_name, ifname) != 0)
       continue;
  
     /* We mark the interface as found, even if there are no addresses;
@@ -1357,6 +1357,9 @@ interfaces (PyObject *self)
   }
 
   for (addr = addrs; addr; addr = addr->ifa_next) {
+    if (addr->ifa_name == NULL)
+      continue;
+
     if (!prev_name || strncmp (addr->ifa_name, prev_name, IFNAMSIZ) != 0) {
       PyObject *ifname = PyUnicode_FromString (addr->ifa_name);
     
