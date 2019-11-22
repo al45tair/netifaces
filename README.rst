@@ -8,7 +8,7 @@ netifaces 0.10.8
 +-------------+------------------+
 
 .. |BuildStatus| image:: https://travis-ci.org/al45tair/netifaces.svg?branch=master
-   :target: https://travis-ci.org/al45tair/dmgbuild
+   :target: https://travis-ci.org/al45tair/netifaces
    :alt: Build Status (Linux/Mac)
 
 .. |WinBuildStatus| image:: https://ci.appveyor.com/api/projects/status/3ctn1bl0aigpfjoo/branch/master?svg=true
