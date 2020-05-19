@@ -462,9 +462,9 @@ string_from_netmask (struct sockaddr *addr,
         --zx;
       if (x & 0x0f)
         zx -= 4;
-      if (x & 0x03)
+      if (x & 0x33)
         zx -= 2;
-      if (x & 0x05)
+      if (x & 0x55)
         zx -= 1;
 
       zeroes += zx;
