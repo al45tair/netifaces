@@ -1567,7 +1567,7 @@ gateways (PyObject *self)
 	  break;
 	}
 
-	ifname = PyUnicode_FromWideChar (pwcsName, -1);
+	ifname = PyUnicode_FromWideChar (pwcsName, wcslen (pwcsName));
 	isdefault = bBest ? Py_True : Py_False;
 
 	tuple = PyTuple_Pack (3, gateway, ifname, isdefault);
@@ -1674,7 +1674,7 @@ gateways (PyObject *self)
       if (bBest)
         dwBestMetric = table->table[n].dwForwardMetric1;
 
-      ifname = PyUnicode_FromWideChar (pwcsName, -1);
+      ifname = PyUnicode_FromWideChar (pwcsName, wcslen (pwcsName));
       gateway = PyUnicode_FromString (gwbuf);
       isdefault = bBest ? Py_True : Py_False;
 
