@@ -1894,8 +1894,14 @@ gateways (PyObject *self)
           attr = RTA_NEXT(attr, len);
         }
 
+        static const unsigned char ipv4_default[4] = {};
+        static const unsigned char ipv6_default[16] = {};
+
         /* We're looking for gateways with no destination */
-        if (!dst && gw && ifndx >= 0) {
+        if ((!dst
+            || (pmsg->rt.rtm_family == AF_INET && !memcmp(dst, ipv4_default, sizeof(ipv4_default)))
+            || (pmsg->rt.rtm_family == AF_INET6 && !memcmp(dst, ipv6_default, sizeof(ipv6_default)))
+        ) && gw && ifndx >= 0) {
           char buffer[256];
           char ifnamebuf[IF_NAMESIZE];
           char *ifname;
