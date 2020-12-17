@@ -1927,16 +1927,22 @@ gateways (PyObject *self)
 
           isdefault = pmsg->rt.rtm_table == RT_TABLE_MAIN ? Py_True : Py_False;
 
+          /* Priority starts at 0, having none means we use kernel default (0) */
+          if (priority < 0) {
+            priority = 0;
+          }
+
           /* Try to pick the active default route based on priority (which
              is displayed in the UI as "metric", confusingly) */
           if (pmsg->rt.rtm_family < RTNL_FAMILY_MAX) {
-            if (def_priorities[pmsg->rt.rtm_family] == -1)
+            /* If no active default route found, or metric is lower */
+            if (def_priorities[pmsg->rt.rtm_family] == -1
+                || priority < def_priorities[pmsg->rt.rtm_family])
+              /* Set new default */
               def_priorities[pmsg->rt.rtm_family] = priority;
-            else {
-              if (priority == -1
-                  || priority > def_priorities[pmsg->rt.rtm_family])
-                isdefault = Py_False;
-            }
+            else
+              /* Leave default, but unset isdefault for iface tuple */
+              isdefault = Py_False;
           }
 
           pyifname = PyUnicode_FromString (ifname);
