@@ -744,7 +744,6 @@ static PyObject* getifaddrsinfo(struct ifaddrs *addr)
       int sock6 = socket (AF_INET6, SOCK_DGRAM, 0);
 
       if (sock6 < 0) {
-        Py_DECREF (result);
         PyErr_SetFromErrno (PyExc_OSError);
         return NULL;
       }
