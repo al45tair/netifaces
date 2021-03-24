@@ -1753,14 +1753,12 @@ interfaces (PyObject *self)
 #elif HAVE_GETIFADDRS
   /* .. UNIX, with getifaddrs() ............................................. */
 
-  const char *prev_name = NULL;
   struct ifaddrs *addrs = NULL;
   struct ifaddrs *addr = NULL;
 
-  result = PyList_New (0);
+  PyObject *dictionary = PyDict_New();
 
   if (getifaddrs (&addrs) < 0) {
-    Py_DECREF (result);
     PyErr_SetFromErrno (PyExc_OSError);
     return NULL;
   }
@@ -1769,15 +1767,10 @@ interfaces (PyObject *self)
     if (addr->ifa_name == NULL)
       continue;
 
-    if (!prev_name || strncmp (addr->ifa_name, prev_name, IFNAMSIZ) != 0) {
-      PyObject *ifname = PyUnicode_FromString (addr->ifa_name);
-    
-      if (!PySequence_Contains (result, ifname))
-        PyList_Append (result, ifname);
-      Py_DECREF (ifname);
-      prev_name = addr->ifa_name;
-    }
+    PyDict_SetItemString(dictionary, addr->ifa_name, Py_None);
   }
+  
+  result = PyMapping_Keys(dictionary);
 
   freeifaddrs (addrs);
 #elif HAVE_SIOCGIFCONF
