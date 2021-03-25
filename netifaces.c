@@ -1351,20 +1351,13 @@ allifaddrs (PyObject *self)
   }
 
   for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
-        PyObject *dict = winifaddrinfo(pInfo);
+        PyObject* dict = winifaddrinfo(pInfo);
 
         if(!dict)
             continue;
 
         PyObject *ifname = PyUnicode_FromString (pInfo->AdapterName);
-        if (PyDict_Contains(result, ifname)) {
-            PyObject* list = PyDict_GetItem(result, ifname);
-            PyList_Append (list, dict);
-        } else {
-            PyObject* list = PyList_New(0);
-            PyList_Append (list, dict);
-            PyDict_SetItem(result, ifname, list);
-        }
+        PyDict_SetItem(result, ifname, dict);
   }
 
   free ((void *)pAdapterAddresses);
@@ -1382,21 +1375,19 @@ allifaddrs (PyObject *self)
     if(!ifinfo)
         continue;
 
-    PyObject *dict = PyDict_New();
-    if (!add_to_family (dict, addr->ifa_addr->sa_family, ifinfo)) {
+    PyObject *ifname = PyUnicode_FromString (addr->ifa_name);
+    PyObject* dict;
+    if (PyDict_Contains(result, ifname)) {
+        dict = PyDict_GetItem(result, ifname);
+    } else {
+	    dict = PyDict_New ();
+        PyDict_SetItem(result, ifname, dict);
+    }
+    
+    if(!add_to_family (dict, addr->ifa_addr->sa_family, ifinfo)) {
       Py_DECREF (dict);
       freeifaddrs (addrs);
       return NULL;
-    }
-
-    PyObject *ifname = PyUnicode_FromString (addr->ifa_name);
-    if (PyDict_Contains(result, ifname)) {
-        PyObject* list = PyDict_GetItem(result, ifname);
-        PyList_Append (list, dict);
-    } else {
-        PyObject* list = PyList_New(0);
-        PyList_Append (list, dict);
-        PyDict_SetItem(result, ifname, list);
     }
 
   }
