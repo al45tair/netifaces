@@ -1299,7 +1299,7 @@ ifaddrs (PyObject *self, PyObject *args)
   }
 }
 
-/* -- ifaddresses() --------------------------------------------------------- */
+/* -- allifaddresses() --------------------------------------------------------- */
 static PyObject *
 allifaddrs (PyObject *self)
 {
@@ -2736,11 +2736,10 @@ static PyMethodDef methods[] = {
     "e.g. netifaces.AF_INET, and whose values are a list of addresses in\n"
     "that family that are attached to the network interface." },
   { "allifaddresses", (PyCFunction)allifaddrs, METH_NOARGS,
-    "Obtain information about the specified network interface.\n"
+    "Obtain information about all network interfaces.\n"
     "\n"
-    "Returns a dict whose keys are equal to the address family constants,\n"
-    "e.g. netifaces.AF_INET, and whose values are a list of addresses in\n"
-    "that family that are attached to the network interface." },
+    "Returns a dict whose keys are equal to the network interface name,\n"
+    "e.g. 'eth0', and whose value is dict of (key: family_address, value: network_interface_info) " },
   { "interfaces", (PyCFunction)interfaces, METH_NOARGS,
     "Obtain a list of the interfaces available on this machine." },
   { "gateways", (PyCFunction)gateways, METH_NOARGS,
