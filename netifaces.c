@@ -943,72 +943,15 @@ static PyObject* socket_ioctls_info(const char* ifname, int sock)
 }
 #endif
 
-/* -- ifaddresses() --------------------------------------------------------- */
-
-static PyObject *
-ifaddrs (PyObject *self, PyObject *args)
+#if defined(WIN32)
+static PyObject* winifaddrinfo(PIP_ADAPTER_ADDRESSES pInfo)
 {
-  const char *ifname;
-  PyObject *result;
-  int found = FALSE;
-#if defined(WIN32)
-  PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, pInfo = NULL;
-  ULONG ulBufferLength = 0;
-  DWORD dwRet;
-  PIP_ADAPTER_UNICAST_ADDRESS pUniAddr;
-#elif HAVE_GETIFADDRS
-  struct ifaddrs *addrs = NULL;
-  struct ifaddrs *addr = NULL;
-#endif
-
-  if (!PyArg_ParseTuple (args, "s", &ifname))
-    return NULL;
-
-  result = PyDict_New ();
-
-  if (!result)
-    return NULL;
-
-#if defined(WIN32)
-  /* .. Win32 ............................................................... */
-
-  /* First, retrieve the adapter information.  We do this in a loop, in
-     case someone adds or removes adapters in the meantime. */
-  do {
-    dwRet = GetAdaptersAddresses (AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
-                                  pAdapterAddresses, &ulBufferLength);
-
-    if (dwRet == ERROR_BUFFER_OVERFLOW) {
-      if (pAdapterAddresses)
-        free (pAdapterAddresses);
-      pAdapterAddresses = (PIP_ADAPTER_ADDRESSES)malloc (ulBufferLength);
-
-      if (!pAdapterAddresses) {
-        Py_DECREF (result);
-        PyErr_SetString (PyExc_MemoryError, "Not enough memory");
+    PIP_ADAPTER_UNICAST_ADDRESS pUniAddr;
+    PyObject* result = PyDict_New();
+    if(!result)
         return NULL;
-      }
-    }
-  } while (dwRet == ERROR_BUFFER_OVERFLOW);
 
-  /* If we failed, then fail in Python too */
-  if (dwRet != ERROR_SUCCESS && dwRet != ERROR_NO_DATA) {
-    Py_DECREF (result);
-    if (pAdapterAddresses)
-      free (pAdapterAddresses);
-
-    PyErr_SetString (PyExc_OSError,
-                     "Unable to obtain adapter information.");
-    return NULL;
-  }
-
-  for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
     char buffer[256];
-
-    if (strcmp (pInfo->AdapterName, ifname) != 0)
-      continue;
-
-    found = TRUE;
 
     /* Do the physical address */
     if (256 >= 3 * pInfo->PhysicalAddressLength) {
@@ -1029,7 +972,6 @@ ifaddrs (PyObject *self, PyObject *args)
       if (!dict) {
         Py_XDECREF (hwaddr);
         Py_DECREF (result);
-        free (pAdapterAddresses);
         return NULL;
       }
 
@@ -1038,7 +980,6 @@ ifaddrs (PyObject *self, PyObject *args)
 
       if (!add_to_family (result, AF_LINK, dict)) {
         Py_DECREF (result);
-        free (pAdapterAddresses);
         return NULL;
       }
     }
@@ -1207,7 +1148,6 @@ ifaddrs (PyObject *self, PyObject *args)
           Py_XDECREF (mask);
           Py_XDECREF (bcast);
           Py_DECREF (result);
-          free (pAdapterAddresses);
           return NULL;
         }
 
@@ -1224,11 +1164,82 @@ ifaddrs (PyObject *self, PyObject *args)
 
         if (!add_to_family (result, family, dict)) {
           Py_DECREF (result);
-          free ((void *)pAdapterAddresses);
           return NULL;
         }
       }
     }
+    return result;
+}
+#endif
+
+/* -- ifaddresses() --------------------------------------------------------- */
+
+static PyObject *
+ifaddrs (PyObject *self, PyObject *args)
+{
+  const char *ifname;
+  PyObject *result;
+  int found = FALSE;
+#if defined(WIN32)
+  PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, pInfo = NULL;
+  ULONG ulBufferLength = 0;
+  DWORD dwRet;
+#elif HAVE_GETIFADDRS
+  struct ifaddrs *addrs = NULL;
+  struct ifaddrs *addr = NULL;
+#endif
+
+  if (!PyArg_ParseTuple (args, "s", &ifname))
+    return NULL;
+
+  result = PyDict_New ();
+
+  if (!result)
+    return NULL;
+
+#if defined(WIN32)
+  /* .. Win32 ............................................................... */
+
+  /* First, retrieve the adapter information.  We do this in a loop, in
+     case someone adds or removes adapters in the meantime. */
+  do {
+    dwRet = GetAdaptersAddresses (AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
+                                  pAdapterAddresses, &ulBufferLength);
+
+    if (dwRet == ERROR_BUFFER_OVERFLOW) {
+      if (pAdapterAddresses)
+        free (pAdapterAddresses);
+      pAdapterAddresses = (PIP_ADAPTER_ADDRESSES)malloc (ulBufferLength);
+
+      if (!pAdapterAddresses) {
+        Py_DECREF (result);
+        PyErr_SetString (PyExc_MemoryError, "Not enough memory");
+        return NULL;
+      }
+    }
+  } while (dwRet == ERROR_BUFFER_OVERFLOW);
+
+  /* If we failed, then fail in Python too */
+  if (dwRet != ERROR_SUCCESS && dwRet != ERROR_NO_DATA) {
+    Py_DECREF (result);
+    if (pAdapterAddresses)
+      free (pAdapterAddresses);
+
+    PyErr_SetString (PyExc_OSError,
+                     "Unable to obtain adapter information.");
+    return NULL;
+  }
+
+  for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
+      if (strcmp (pInfo->AdapterName, ifname) != 0)
+        continue;
+
+      result = winifaddrinfo(pInfo);
+      if(!result)
+          continue;
+
+      found = TRUE;
+      break;
   }
 
   free ((void *)pAdapterAddresses);
@@ -1295,9 +1306,8 @@ allifaddrs (PyObject *self)
     PyObject *result;
 #if defined(WIN32)
     PIP_ADAPTER_ADDRESSES pAdapterAddresses = NULL, pInfo = NULL;
-  ULONG ulBufferLength = 0;
-  DWORD dwRet;
-  PIP_ADAPTER_UNICAST_ADDRESS pUniAddr;
+    ULONG ulBufferLength = 0;
+    DWORD dwRet;
 #elif HAVE_GETIFADDRS
     struct ifaddrs *addrs = NULL;
     struct ifaddrs *addr = NULL;
@@ -1307,7 +1317,6 @@ allifaddrs (PyObject *self)
 
     if (!result)
         return NULL;
-
 #if defined(WIN32)
     /* .. Win32 ............................................................... */
 
@@ -1342,230 +1351,20 @@ allifaddrs (PyObject *self)
   }
 
   for (pInfo = pAdapterAddresses; pInfo; pInfo = pInfo->Next) {
-    char buffer[256];
+        PyObject *dict = winifaddrinfo(pInfo);
 
-    if (strcmp (pInfo->AdapterName, ifname) != 0)
-      continue;
-
-    /* Do the physical address */
-    if (256 >= 3 * pInfo->PhysicalAddressLength) {
-      PyObject *hwaddr, *dict;
-      char *ptr = buffer;
-      unsigned n;
-
-      *ptr = '\0';
-      for (n = 0; n < pInfo->PhysicalAddressLength; ++n) {
-        sprintf (ptr, "%02x:", pInfo->PhysicalAddress[n] & 0xff);
-        ptr += 3;
-      }
-      *--ptr = '\0';
-
-      hwaddr = PyUnicode_FromString (buffer);
-      dict = PyDict_New ();
-
-      if (!dict) {
-        Py_XDECREF (hwaddr);
-        Py_DECREF (result);
-        free (pAdapterAddresses);
-        return NULL;
-      }
-
-      PyDict_SetItemString (dict, "addr", hwaddr);
-      Py_DECREF (hwaddr);
-
-      if (!add_to_family (result, AF_LINK, dict)) {
-        Py_DECREF (result);
-        free (pAdapterAddresses);
-        return NULL;
-      }
-    }
-
-    for (pUniAddr = pInfo->FirstUnicastAddress;
-         pUniAddr;
-         pUniAddr = pUniAddr->Next) {
-      PyObject *addr;
-      PyObject *mask = NULL;
-      PyObject *bcast = NULL;
-      PIP_ADAPTER_PREFIX pPrefix;
-      short family = pUniAddr->Address.lpSockaddr->sa_family;
-
-      addr = string_from_address (pUniAddr->Address.lpSockaddr,
-                                  pUniAddr->Address.iSockaddrLength);
-
-      if (!addr)
-        continue;
-
-      /* Find the netmask, where possible */
-      if (family == AF_INET) {
-        struct sockaddr_in *pAddr
-          = (struct sockaddr_in *)pUniAddr->Address.lpSockaddr;
-        int prefix_len = -1;
-        struct sockaddr_in maskAddr, bcastAddr;
-        unsigned toDo;
-        unsigned wholeBytes, remainingBits;
-        unsigned char *pMaskBits, *pBcastBits;
-        PIP_ADAPTER_PREFIX pBest = NULL;
-
-        for (pPrefix = pInfo->FirstPrefix;
-             pPrefix;
-             pPrefix = pPrefix->Next) {
-          struct sockaddr_in *pPrefixAddr
-            = (struct sockaddr_in *)pPrefix->Address.lpSockaddr;
-
-          if (pPrefixAddr->sin_family != AF_INET
-              || (prefix_len >= 0
-		  && pPrefix->PrefixLength < (unsigned)prefix_len)
-	      || (prefix_len >= 0 && pPrefix->PrefixLength == 32))
+        if(!dict)
             continue;
 
-          if (compare_bits (&pPrefixAddr->sin_addr,
-                            &pAddr->sin_addr,
-                            pPrefix->PrefixLength) == 0) {
-            prefix_len = pPrefix->PrefixLength;
-            pBest = pPrefix;
-          }
+        PyObject *ifname = PyUnicode_FromString (pInfo->AdapterName);
+        if (PyDict_Contains(result, ifname)) {
+            PyObject* list = PyDict_GetItem(result, ifname);
+            PyList_Append (list, dict);
+        } else {
+            PyObject* list = PyList_New(0);
+            PyList_Append (list, dict);
+            PyDict_SetItem(result, ifname, list);
         }
-
-        if (!pBest)
-          continue;
-
-        if (prefix_len < 0)
-          prefix_len = 32;
-
-        memcpy (&maskAddr,
-                pBest->Address.lpSockaddr,
-                sizeof (maskAddr));
-        memcpy (&bcastAddr,
-                pBest->Address.lpSockaddr,
-                sizeof (bcastAddr));
-
-        wholeBytes = prefix_len >> 3;
-        remainingBits = prefix_len & 7;
-
-        toDo = wholeBytes;
-        pMaskBits = (unsigned char *)&maskAddr.sin_addr;
-
-        while (toDo--)
-          *pMaskBits++ = 0xff;
-
-        toDo = 4 - wholeBytes;
-
-        pBcastBits = (unsigned char *)&bcastAddr.sin_addr + wholeBytes;
-
-        if (remainingBits) {
-          static const unsigned char masks[] = {
-            0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
-          };
-          *pMaskBits++ = masks[remainingBits];
-          *pBcastBits &= masks[remainingBits];
-          *pBcastBits++ |= ~masks[remainingBits];
-          --toDo;
-        }
-
-        while (toDo--) {
-          *pMaskBits++ = 0;
-          *pBcastBits++ = 0xff;
-        }
-
-        mask = string_from_address ((SOCKADDR *)&maskAddr,
-                                    sizeof (maskAddr));
-        bcast = string_from_address ((SOCKADDR *)&bcastAddr,
-                                     sizeof (bcastAddr));
-      } else if (family == AF_INET6) {
-        struct sockaddr_in6 *pAddr
-          = (struct sockaddr_in6 *)pUniAddr->Address.lpSockaddr;
-        int prefix_len = -1;
-        struct sockaddr_in6 bcastAddr;
-        unsigned toDo;
-        unsigned wholeBytes, remainingBits;
-        unsigned char *pBcastBits;
-        PIP_ADAPTER_PREFIX pBest = NULL;
-
-        for (pPrefix = pInfo->FirstPrefix;
-             pPrefix;
-             pPrefix = pPrefix->Next) {
-          struct sockaddr_in6 *pPrefixAddr
-            = (struct sockaddr_in6 *)pPrefix->Address.lpSockaddr;
-
-          if (pPrefixAddr->sin6_family != AF_INET6
-              || (prefix_len >= 0
-		  && pPrefix->PrefixLength < (unsigned)prefix_len)
-	      || (prefix_len >= 0 && pPrefix->PrefixLength == 128))
-            continue;
-
-          if (compare_bits (&pPrefixAddr->sin6_addr,
-                            &pAddr->sin6_addr,
-                            pPrefix->PrefixLength) == 0) {
-            prefix_len = pPrefix->PrefixLength;
-            pBest = pPrefix;
-          }
-        }
-
-        if (!pBest)
-          continue;
-
-        if (prefix_len < 0)
-          prefix_len = 128;
-
-        memcpy (&bcastAddr,
-                pBest->Address.lpSockaddr,
-                sizeof (bcastAddr));
-
-        wholeBytes = prefix_len >> 3;
-        remainingBits = prefix_len & 7;
-
-        toDo = 16 - wholeBytes;
-
-        pBcastBits = (unsigned char *)&bcastAddr.sin6_addr + wholeBytes;
-
-        if (remainingBits) {
-          static const unsigned char masks[] = {
-            0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe
-          };
-          *pBcastBits &= masks[remainingBits];
-          *pBcastBits++ |= ~masks[remainingBits];
-          --toDo;
-        }
-
-        while (toDo--)
-          *pBcastBits++ = 0xff;
-
-        mask = netmask_from_prefix (prefix_len);
-        bcast = string_from_address ((SOCKADDR *)&bcastAddr, sizeof(bcastAddr));
-      }
-
-      {
-        PyObject *dict;
-
-        dict = PyDict_New ();
-
-        if (!dict) {
-          Py_XDECREF (addr);
-          Py_XDECREF (mask);
-          Py_XDECREF (bcast);
-          Py_DECREF (result);
-          free (pAdapterAddresses);
-          return NULL;
-        }
-
-        if (addr)
-          PyDict_SetItemString (dict, "addr", addr);
-        if (mask)
-          PyDict_SetItemString (dict, "netmask", mask);
-        if (bcast)
-          PyDict_SetItemString (dict, "broadcast", bcast);
-
-        Py_XDECREF (addr);
-        Py_XDECREF (mask);
-        Py_XDECREF (bcast);
-
-        if (!add_to_family (result, family, dict)) {
-          Py_DECREF (result);
-          free ((void *)pAdapterAddresses);
-          return NULL;
-        }
-      }
-    }
   }
 
   free ((void *)pAdapterAddresses);
