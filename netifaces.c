@@ -1358,6 +1358,7 @@ allifaddrs (PyObject *self)
 
         PyObject *ifname = PyUnicode_FromString (pInfo->AdapterName);
         PyDict_SetItem(result, ifname, dict);
+	Py_XDECREF(ifname);
   }
 
   free ((void *)pAdapterAddresses);
@@ -1380,10 +1381,12 @@ allifaddrs (PyObject *self)
     if (PyDict_Contains(result, ifname)) {
         dict = PyDict_GetItem(result, ifname);
     } else {
-	    dict = PyDict_New ();
+	dict = PyDict_New ();
         PyDict_SetItem(result, ifname, dict);
     }
-    
+
+    Py_XDECREF(ifname);    
+
     if(!add_to_family (dict, addr->ifa_addr->sa_family, ifinfo)) {
       Py_DECREF (dict);
       freeifaddrs (addrs);
@@ -1461,6 +1464,7 @@ allifaddrs (PyObject *self)
       {
         PyObject* dict = socket_ioctls_info(if_name, sock);
         PyDict_SetItem(result, name, dict);
+	Py_XDECREF(dict);
       }
 
 #if !HAVE_SOCKADDR_SA_LEN
