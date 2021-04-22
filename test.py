@@ -48,3 +48,18 @@ for family in default_gateways:
     fam_name = netifaces.address_families[family]
     gateway, interface = default_gateways[family]
     print('  %s: %s (via %s)' % (fam_name, gateway, interface))
+
+print('')
+
+print('Getting information about all available interfaces: ')
+all_interfaces = netifaces.allifaddresses()
+for if_name, if_info in all_interfaces.items():
+    all_Addrs = netifaces.ifaddresses(if_name)
+
+    if all_Addrs == if_info:
+        print('     Information for %s from netifaces.allifaddresses()\n'
+              '     are equal with info from netifaces.ifaddresses(\'%s\')' % (if_name, if_name))
+    else:
+        print('     Information for %s from netifaces.allifaddresses()\n'
+              '     are NOT EQUAL with info from netifaces.ifaddresses(\'%s\')!!!' % (if_name, if_name))
+    print('')
