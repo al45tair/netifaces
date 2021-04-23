@@ -2563,9 +2563,9 @@ static PyMethodDef methods[] = {
   { NULL, NULL, 0, NULL }
 };
 
-MODULE_DEF("netifaces", NULL, methods);
+MODULE_DEF("_netifaces", NULL, methods);
 
-MODULE_INIT(netifaces)
+MODULE_INIT(_netifaces)
 {
   PyObject *address_family_dict;
   PyObject *m;
@@ -2576,7 +2576,7 @@ MODULE_INIT(netifaces)
   WSAStartup(MAKEWORD (2, 2), &wsad);
 #endif
 
-  MODULE_CREATE(m, "netifaces", NULL, methods);
+  MODULE_CREATE(m, "_netifaces", NULL, methods);
   if (!m)
     return MODULE_ERROR;
 

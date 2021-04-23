@@ -31,7 +31,7 @@ else:
 
 def_macros.append(("NETIFACES_VERSION", __version__))
 
-iface_mod = Extension('netifaces', sources=['netifaces.c'],
+iface_mod = Extension('_netifaces', sources=['netifaces/_netifaces.c'],
                       libraries=libraries,
                       define_macros=def_macros)
 
