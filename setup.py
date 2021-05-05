@@ -1,28 +1,16 @@
-import setuptools
+from __future__ import print_function
+
 import os
 import sys
-import distutils.spawn
-from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext
-from distutils.errors import *
 import pickle
 
-if sys.version_info[0] == 2:
-    def output(*args, **kwargs):
-        end = kwargs.get('end', '\n')
-        f = kwargs.get('file', sys.stdout)
-        f.write(' '.join(str(a) for a in args))
-        f.write(end)
-else:
-    try:
-        import builtins
-    except ImportError:
-        import __builtin__
-        builtins = __builtin__
+import setuptools
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
+from setuptools.config import read_configuration
+from distutils.errors import *
 
-    output = getattr(builtins, 'print', lambda x: True)
-
-__version__ = "0.10.9"
+__version__ = read_configuration('setup.cfg')['metadata']['version']
 
 # Disable hard links, otherwise building distributions fails on OS X
 try:
@@ -43,9 +31,10 @@ else:
 
 def_macros.append(("NETIFACES_VERSION", __version__))
 
-iface_mod = Extension('netifaces', sources=['netifaces.c'],
+iface_mod = Extension('_netifaces', sources=['netifaces/_netifaces.c'],
                       libraries=libraries,
                       define_macros=def_macros)
+
 
 #
 #  There must be a better way to do this...
@@ -124,7 +113,7 @@ class my_build_ext(build_ext):
 
         self.conftestidx = 0
         
-        output("checking for getifaddrs...", end='')
+        print("checking for getifaddrs...", end='')
 
         result = results.get('have_getifaddrs', None)
         if result is not None:
@@ -154,14 +143,14 @@ class my_build_ext(build_ext):
                 result = False
 
         if result:
-            output("found. %s" % cached)
+            print("found. %s" % cached)
             self.compiler.define_macro('HAVE_GETIFADDRS', 1)
         else:
-            output("not found. %s" % cached)
+            print("not found. %s" % cached)
 
         results['have_getifaddrs'] = result
 
-        output("checking for getnameinfo...", end='')
+        print("checking for getnameinfo...", end='')
 
         result = results.get('have_getnameinfo', None)
         if result is not None:
@@ -202,15 +191,15 @@ class my_build_ext(build_ext):
                 result = False
 
         if result:
-            output("found. %s" % cached)
+            print("found. %s" % cached)
             self.compiler.define_macro('HAVE_GETNAMEINFO', 1)
         else:
-            output("not found. %s" % cached)
+            print("not found. %s" % cached)
 
         results['have_getnameinfo'] = result
 
         if results['have_getifaddrs']:
-            output("checking for IPv6 socket IOCTLs...", end='')
+            print("checking for IPv6 socket IOCTLs...", end='')
 
             result = results.get('have_ipv6_socket_ioctls', None)
             if result is not None:
@@ -257,17 +246,17 @@ class my_build_ext(build_ext):
                         result.append(ioctl)
 
             if result:
-                output("%r. %s" % (result, cached))
+                print("%r. %s" % (result, cached))
                 for ioctl in result:
                     self.compiler.define_macro('HAVE_%s' % ioctl, 1)
                 self.compiler.define_macro('HAVE_IPV6_SOCKET_IOCTLS', 1)
             else:
-                output("not found. %s" % cached)
+                print("not found. %s" % cached)
 
             results['have_ipv6_socket_ioctls'] = result
 
         if not results['have_getifaddrs']:
-            output("checking for socket IOCTLs...", end='')
+            print("checking for socket IOCTLs...", end='')
 
             result = results.get('have_socket_ioctls', None)
             if result is not None:
@@ -323,16 +312,16 @@ class my_build_ext(build_ext):
                         result.append(ioctl)
 
             if result:
-                output("%r. %s" % (result, cached))
+                print("%r. %s" % (result, cached))
                 for ioctl in result:
                     self.compiler.define_macro('HAVE_%s' % ioctl, 1)
                 self.compiler.define_macro('HAVE_SOCKET_IOCTLS', 1)
             else:
-                output("not found. %s" % cached)
+                print("not found. %s" % cached)
 
             results['have_socket_ioctls'] = result
 
-        output("checking for optional header files...", end='')
+        print("checking for optional header files...", end='')
 
         result = results.get('have_headers', None)
         if result is not None:
@@ -362,17 +351,17 @@ class my_build_ext(build_ext):
                     result.append(header)
 
         if result:
-            output("%s. %s" % (' '.join(result), cached))
+            print("%s. %s" % (' '.join(result), cached))
             for header in result:
                 macro = header.upper().replace('.', '_').replace('/', '_')
                 self.compiler.define_macro('HAVE_%s' % macro, 1)
         else:
-            output("none found. %s" % cached)
+            print("none found. %s" % cached)
 
         optional_headers = result
         results['have_headers'] = result
 
-        output("checking whether struct sockaddr has a length field...", end='')
+        print("checking whether struct sockaddr has a length field...", end='')
 
         result = results.get('have_sockaddr_sa_len', None)
         if result is not None:
@@ -395,10 +384,10 @@ class my_build_ext(build_ext):
             result = self.test_build(testrig)
 
         if result:
-            output('yes. %s' % cached)
+            print('yes. %s' % cached)
             self.compiler.define_macro('HAVE_SOCKADDR_SA_LEN', 1)
         else:
-            output('no. %s' % cached)
+            print('no. %s' % cached)
 
         results['have_sockaddr_sa_len'] = result
 
@@ -408,7 +397,7 @@ class my_build_ext(build_ext):
             # however, unfortunately, getifaddrs() doesn't return the
             # lengths, because they're in the sa_len field on just about
             # everything but Linux.
-            output("checking which sockaddr_xxx structs are defined...", end='')
+            print("checking which sockaddr_xxx structs are defined...", end='')
             
             result = results.get('have_sockaddrs', None)
             if result is not None:
@@ -448,18 +437,18 @@ class my_build_ext(build_ext):
                         result.append(sockaddr)
                 
             if result:
-                output('%s. %s' % (' '.join(result), cached))
+                print('%s. %s' % (' '.join(result), cached))
                 for sockaddr in result:
                     self.compiler.define_macro('HAVE_SOCKADDR_%s' \
                                                % sockaddr.upper(), 1)
             else:
-                output('none! %s' % cached)
+                print('none! %s' % cached)
 
             results['have_sockaddrs'] = result
 
         # Reading routing tables is very OS dependent; check for a few
         # different approaches.
-        output("checking for routing socket support...", end='')
+        print("checking for routing socket support...", end='')
 
         result = results.get('have_pf_route', None)
         if result is not None:
@@ -482,14 +471,14 @@ class my_build_ext(build_ext):
             result = self.test_build(testrig)
 
         if result:
-            output('yes. %s' % cached)
+            print('yes. %s' % cached)
             self.compiler.define_macro('HAVE_PF_ROUTE', 1)
         else:
-            output('no. %s' % cached)
+            print('no. %s' % cached)
 
         results['have_pf_route'] = result
 
-        output("checking for sysctl(CTL_NET...) support...", end='')
+        print("checking for sysctl(CTL_NET...) support...", end='')
 
         result = results.get('have_sysctl_ctl_net', None)
         if result is not None:
@@ -513,14 +502,14 @@ class my_build_ext(build_ext):
             result = self.test_build(testrig)
 
         if result:
-            output('yes. %s' % cached)
+            print('yes. %s' % cached)
             self.compiler.define_macro('HAVE_SYSCTL_CTL_NET', 1)
         else:
-            output('no. %s' % cached)
+            print('no. %s' % cached)
 
         results['have_sysctl_ctl_net'] = result
 
-        output("checking for netlink support...", end='')
+        print("checking for netlink support...", end='')
 
         result = results.get('have_pf_netlink', None)
         if result is not None:
@@ -543,19 +532,19 @@ class my_build_ext(build_ext):
             result = self.test_build(testrig)
 
         if result:
-            output('yes. %s' % cached)
+            print('yes. %s' % cached)
             self.compiler.define_macro('HAVE_PF_NETLINK', 1)
         else:
-            output('no. %s' %  cached)
+            print('no. %s' %  cached)
 
         results['have_pf_netlink'] = result
 
         if results['have_pf_netlink']:
-            output('will use netlink to read routing table')
+            print('will use netlink to read routing table')
         elif results['have_sysctl_ctl_net']:
-            output('will use sysctl() to read routing table')
+            print('will use sysctl() to read routing table')
         elif results['have_pf_route']:
-            output('will use routing socket to read routing table')
+            print('will use routing socket to read routing table')
 
         # Save the results to our config.cache file
         myfile = open(cache_file, 'wb')
@@ -564,37 +553,9 @@ class my_build_ext(build_ext):
         finally:
             myfile.close()
 
+
 # Don't bother detecting socket ioctls on Windows
 if not getattr(sys, 'getwindowsversion', None):
     setuptools.command.build_ext.build_ext = my_build_ext
 
-readme_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                           'README.rst')
-with open(readme_path, 'r') as fp:
-    long_desc = fp.read()
-
-setup (name='netifaces',
-       version=__version__,
-       zip_safe=True,
-       description="Portable network interface information.",
-       license="MIT License",
-       long_description=long_desc,
-       author='Alastair Houghton',
-       author_email='alastair@alastairs-place.net',
-       url='https://github.com/al45tair/netifaces',
-       classifiers=[
-    'Development Status :: 4 - Beta',
-    'Intended Audience :: Developers',
-    'License :: OSI Approved :: MIT License',
-    'Topic :: System :: Networking',
-    'Programming Language :: Python',
-    'Programming Language :: Python :: 2',
-    'Programming Language :: Python :: 2.7',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.4',
-    'Programming Language :: Python :: 3.5',
-    'Programming Language :: Python :: 3.6',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8'
-    ],
-       ext_modules=[iface_mod])
+setup(ext_modules=[iface_mod])

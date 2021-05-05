@@ -2537,16 +2537,34 @@ gateways (PyObject *self)
 
 /* -- Python Module --------------------------------------------------------- */
 
+// On Python >= 3.4, the function signature shown by help() can be customized if the 
+// function signature is followed by --\n\n
+// https://stackoverflow.com/a/41245451
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 4
+#define SIGNATURE_SEPARATOR "--\n"
+#else
+#define SIGNATURE_SEPARATOR ""
+#endif
+
 static PyMethodDef methods[] = {
   { "ifaddresses", (PyCFunction)ifaddrs, METH_VARARGS,
+    "ifaddresses(ifaddress, /)\n"
+    SIGNATURE_SEPARATOR
+    "\n"
     "Obtain information about the specified network interface.\n"
 "\n"
 "Returns a dict whose keys are equal to the address family constants,\n"
 "e.g. netifaces.AF_INET, and whose values are a list of addresses in\n"
 "that family that are attached to the network interface." },
   { "interfaces", (PyCFunction)interfaces, METH_NOARGS,
+    "interfaces()\n"
+    SIGNATURE_SEPARATOR
+    "\n"
     "Obtain a list of the interfaces available on this machine." },
   { "gateways", (PyCFunction)gateways, METH_NOARGS,
+    "gateways()\n"
+    SIGNATURE_SEPARATOR
+    "\n"
     "Obtain a list of the gateways on this machine.\n"
 "\n"
 "Returns a dict whose keys are equal to the address family constants,\n"
@@ -2563,9 +2581,9 @@ static PyMethodDef methods[] = {
   { NULL, NULL, 0, NULL }
 };
 
-MODULE_DEF("netifaces", NULL, methods);
+MODULE_DEF("_netifaces", NULL, methods);
 
-MODULE_INIT(netifaces)
+MODULE_INIT(_netifaces)
 {
   PyObject *address_family_dict;
   PyObject *m;
@@ -2576,7 +2594,7 @@ MODULE_INIT(netifaces)
   WSAStartup(MAKEWORD (2, 2), &wsad);
 #endif
 
-  MODULE_CREATE(m, "netifaces", NULL, methods);
+  MODULE_CREATE(m, "_netifaces", NULL, methods);
   if (!m)
     return MODULE_ERROR;
 
