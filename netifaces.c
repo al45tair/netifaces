@@ -1894,8 +1894,14 @@ gateways (PyObject *self)
           attr = RTA_NEXT(attr, len);
         }
 
+        static const unsigned char ipv4_default[4] = {};
+        static const unsigned char ipv6_default[16] = {};
+
         /* We're looking for gateways with no destination */
-        if (!dst && gw && ifndx >= 0) {
+        if ((!dst
+            || (pmsg->rt.rtm_family == AF_INET && !memcmp(dst, ipv4_default, sizeof(ipv4_default)))
+            || (pmsg->rt.rtm_family == AF_INET6 && !memcmp(dst, ipv6_default, sizeof(ipv6_default)))
+        ) && gw && ifndx >= 0) {
           char buffer[256];
           char ifnamebuf[IF_NAMESIZE];
           char *ifname;
@@ -1921,16 +1927,22 @@ gateways (PyObject *self)
 
           isdefault = pmsg->rt.rtm_table == RT_TABLE_MAIN ? Py_True : Py_False;
 
+          /* Priority starts at 0, having none means we use kernel default (0) */
+          if (priority < 0) {
+            priority = 0;
+          }
+
           /* Try to pick the active default route based on priority (which
              is displayed in the UI as "metric", confusingly) */
           if (pmsg->rt.rtm_family < RTNL_FAMILY_MAX) {
-            if (def_priorities[pmsg->rt.rtm_family] == -1)
+            /* If no active default route found, or metric is lower */
+            if (def_priorities[pmsg->rt.rtm_family] == -1
+                || priority < def_priorities[pmsg->rt.rtm_family])
+              /* Set new default */
               def_priorities[pmsg->rt.rtm_family] = priority;
-            else {
-              if (priority == -1
-                  || priority > def_priorities[pmsg->rt.rtm_family])
-                isdefault = Py_False;
-            }
+            else
+              /* Leave default, but unset isdefault for iface tuple */
+              isdefault = Py_False;
           }
 
           pyifname = PyUnicode_FromString (ifname);
