@@ -15,6 +15,11 @@ netifaces 0.10.8
    :target: https://ci.appveyor.com/project/al45tair/netifaces/branch/master
    :alt: Build Status (Windows)
 
+.. warning::
+
+   netifaces needs a new maintainer.  al45tair is no longer able to maintain it
+   or make new releases due to work commitments.
+
 1. What is this?
 ----------------
 
