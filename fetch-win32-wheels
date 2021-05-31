@@ -19,7 +19,11 @@ win32_versions="27 34 35 36 37 38"
 amd64_versions="27 36 37 38"
 
 for version in $win32_versions; do
-    wheel=netifaces-$niversion-cp$version-cp${version}m-win32.whl
+    maybe_m=
+    if [ $version -lt 38 ]; then
+	maybe_m=m
+    fi
+    wheel=netifaces-$niversion-cp$version-cp${version}${maybe_m}-win32.whl
     url="$artifact_url/dist/$wheel?${maybetag}job=Environment:%20PYTHON=C:\\Python$version"
     echo -n "$wheel..."
     if curl -s -L -o wheelhouse/$wheel $url; then
@@ -31,7 +35,11 @@ for version in $win32_versions; do
 done
 
 for version in $amd64_versions; do
-    wheel=netifaces-$niversion-cp$version-cp${version}m-win_amd64.whl
+    maybe_m=
+    if [ $version -lt 38 ]; then
+	maybe_m=m
+    fi
+    wheel=netifaces-$niversion-cp$version-cp${version}${maybe_m}-win_amd64.whl
     url="$artifact_url/dist/$wheel?${maybetag}job=Environment:%20PYTHON=C:\\Python$version-x64"
     echo -n "$wheel..."
     if curl -s -L -o wheelhouse/$wheel $url; then
